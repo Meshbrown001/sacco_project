@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SACCO Member Registration</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+  <div class="auth-container">
+    <h2>Register as a SACCO Member</h2>
+    <p id="error-message" class="error"></p>
+    <form id="register-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" required>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" required>
+
+      <label for="phone_number">Phone Number</label>
+      <input type="text" id="phone_number" placeholder="07XXXXXXXX" required>
+
+      <label for="national_id">National ID</label>
+      <input type="text" id="national_id" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required>
+
+      <label for="password2">Confirm Password</label>
+      <input type="password" id="password2" required>
+
+      <button type="submit">Register</button>
+    </form>
+    <p>Already have an account? <a href="login.html">Login here</a></p>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById("register-form").addEventListener("submit", handleRegister);
+  </script>
+</body>
+</html>
