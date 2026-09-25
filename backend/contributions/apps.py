@@ -2,4 +2,8 @@ from django.apps import AppConfig
 
 
 class ContributionsConfig(AppConfig):
-    name = 'contributions'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "contributions"
+
+    def ready(self):
+        import contributions.signals

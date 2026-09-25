@@ -1,0 +1,71 @@
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f4f6f8;
+  color: #1f2a30;
+}
+
+.topbar {
+  background: #2c5f6f;
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topbar h1 { font-size: 1.3rem; font-weight: normal; margin: 0; }
+
+.topbar-right { display: flex; align-items: center; gap: 1rem; }
+
+#logout-btn {
+  background: #1f4550;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dashboard { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.card h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #667; font-weight: normal; }
+
+.big-number { font-size: 1.6rem; font-weight: bold; margin: 0; }
+
+.debt-card { border-left: 4px solid #c0392b; }
+
+.debt-detail { font-size: 0.8rem; color: #667; margin-top: 0.5rem; }
+
+.table-section { background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+.table-section h2 { font-size: 1.1rem; margin-top: 0; }
+
+table { width: 100%; border-collapse: collapse; }
+
+th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+
+th { color: #667; font-weight: normal; }
+
+.status-paid { color: #1e8449; font-weight: bold; }
+.status-overdue, .status-unpaid { color: #c0392b; font-weight: bold; }
+
+.empty-note { color: #889; font-style: italic; }
+
+.error { color: #c0392b; text-align: center; }

@@ -1,5 +1,4 @@
-
-# Create your models here.
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -26,6 +25,7 @@ class CustomUser(AbstractUser):
 
     # Extra fields useful for a SACCO member
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    phone_verified = models.BooleanField(default=False)
     national_id = models.CharField(max_length=20, unique=True, null=True, blank=True)
     date_joined_sacco = models.DateField(auto_now_add=True)
 
@@ -46,3 +46,34 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return f"{self.username} ({self.role})"
+
+
+class OTPCode(models.Model):
+    """
+    One-time codes sent by SMS. The same table serves phone
+    verification and password reset, told apart by `purpose`.
+    Only a hash of each code is stored.
+    """
+
+    class Purpose(models.TextChoices):
+        PHONE_VERIFICATION = 'phone_verification', 'Phone verification'
+        PASSWORD_RESET = 'password_reset', 'Password reset'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='otp_codes',
+    )
+    purpose = models.CharField(max_length=30, choices=Purpose.choices)
+    code_hash = models.CharField(max_length=255)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'purpose', 'is_used'])]
+
+    def __str__(self):
+        return f"{self.get_purpose_display()} code for {self.user}"

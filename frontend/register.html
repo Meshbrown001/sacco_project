@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SACCO Member Registration</title>
   <link rel="stylesheet" href="css/auth.css">
 </head>
@@ -9,34 +10,48 @@
   <div class="auth-container">
     <h2>Register as a SACCO Member</h2>
     <p id="error-message" class="error"></p>
-    <form id="register-form">
+
+    <form id="register-form" novalidate>
+      <label for="first_name">First Name</label>
+      <input type="text" id="first_name" autocomplete="given-name" required>
+      <small class="field-error" id="error-first_name"></small>
+
+      <label for="last_name">Last Name</label>
+      <input type="text" id="last_name" autocomplete="family-name" required>
+      <small class="field-error" id="error-last_name"></small>
+
       <label for="username">Username</label>
-      <input type="text" id="username" required>
+      <input type="text" id="username" autocomplete="username" required>
+      <small class="field-error" id="error-username"></small>
 
       <label for="email">Email</label>
-      <input type="email" id="email" required>
+      <input type="email" id="email" autocomplete="email" required>
+      <small class="field-error" id="error-email"></small>
 
       <label for="phone_number">Phone Number</label>
-      <input type="text" id="phone_number" placeholder="07XXXXXXXX" required>
+      <input type="tel" id="phone_number" placeholder="07XXXXXXXX"
+             inputmode="numeric" autocomplete="tel" required>
+      <small class="field-error" id="error-phone_number"></small>
 
       <label for="national_id">National ID</label>
-      <input type="text" id="national_id" required>
+      <input type="text" id="national_id" inputmode="numeric" maxlength="8" required>
+      <small class="field-error" id="error-national_id"></small>
 
       <label for="password">Password</label>
-      <input type="password" id="password" required>
+      <input type="password" id="password" autocomplete="new-password" required>
+      <small class="field-error" id="error-password"></small>
 
       <label for="password2">Confirm Password</label>
-      <input type="password" id="password2" required>
+      <input type="password" id="password2" autocomplete="new-password" required>
+      <small class="field-error" id="error-password2"></small>
 
-      <button type="submit">Register</button>
+      <button type="submit" id="register-button">Register</button>
     </form>
+
     <p>Already have an account? <a href="login.html">Login here</a></p>
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
-  <script>
-    document.getElementById("register-form").addEventListener("submit", handleRegister);
-  </script>
 </body>
 </html>

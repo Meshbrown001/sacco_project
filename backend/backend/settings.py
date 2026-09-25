@@ -1,5 +1,3 @@
-from decouple import config
-from datetime import timedelta
 """
 Django settings for backend project.
 
@@ -12,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
+
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -139,13 +140,46 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # Limits for the SMS code endpoints (phone verification, password reset)
+    'DEFAULT_THROTTLE_RATES': {
+        'otp_send': '5/hour',
+        'otp_verify': '15/hour',
+    },
 }
 
 
 # Simple JWT settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+}
+
+
+# SMS settings (phone verification and password reset codes)
+# SMS_BACKEND=console prints codes in the server window.
+# SMS_BACKEND=africastalking sends real messages.
+SMS_BACKEND = config('SMS_BACKEND', default='console')
+AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
+AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
+AFRICASTALKING_SENDER_ID = config('AFRICASTALKING_SENDER_ID', default='')
+
+
+# Logging - shows SMS failures and other app errors in the server window
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {'format': '[{levelname}] {name}: {message}', 'style': '{'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
+    },
+    'loggers': {
+        'accounts': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'contributions': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'payments': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
 }

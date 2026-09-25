@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Member Dashboard</title>
+  <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Nyikwa Abiya Welfare</h1>
+    <div class="topbar-right">
+      <span id="welcome"></span>
+      <button id="logout-btn">Log out</button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <p id="error-message" class="error"></p>
+
+    <section class="cards">
+      <div class="card">
+        <h3>Wallet Balance</h3>
+        <p class="big-number" id="wallet-balance">—</p>
+      </div>
+      <div class="card">
+        <h3>Current Monthly Amount</h3>
+        <p class="big-number" id="monthly-amount">—</p>
+      </div>
+      <div class="card debt-card">
+        <h3>Total You Owe</h3>
+        <p class="big-number" id="total-owed">—</p>
+        <p class="debt-detail" id="debt-detail"></p>
+      </div>
+    </section>
+
+    <section class="table-section">
+      <h2>My Monthly Contributions</h2>
+      <table id="contributions-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Amount Paid</th>
+            <th>Date Paid</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="no-contributions" class="empty-note" style="display:none;">
+        No contributions recorded yet.
+      </p>
+    </section>
+
+    <section class="table-section">
+      <h2>Penalties Charged</h2>
+      <table id="penalties-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Amount</th>
+            <th>Date Charged</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="no-penalties" class="empty-note" style="display:none;">
+        No penalties. Good standing.
+      </p>
+    </section>
+  </main>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/member.js"></script>
+</body>
+</html>
