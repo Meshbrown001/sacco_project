@@ -25,7 +25,13 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# localhost always works. Extra hosts, such as the ngrok tunnel that
+# Safaricom calls, come from EXTRA_ALLOWED_HOSTS in .env.
+ALLOWED_HOSTS = ['localhost', '127.0.0.1'] + [
+    host.strip()
+    for host in config('EXTRA_ALLOWED_HOSTS', default='').split(',')
+    if host.strip()
+]
 
 
 # Application definition
@@ -165,6 +171,16 @@ SMS_BACKEND = config('SMS_BACKEND', default='console')
 AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
 AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
 AFRICASTALKING_SENDER_ID = config('AFRICASTALKING_SENDER_ID', default='')
+
+
+# M-Pesa Daraja settings. Secrets live in .env, never in code.
+# MPESA_ENV=sandbox uses Safaricom's test system; production goes live.
+MPESA_ENV = config('MPESA_ENV', default='sandbox')
+MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default='')
+MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
+MPESA_PASSKEY = config('MPESA_PASSKEY', default='')
+MPESA_CALLBACK_BASE_URL = config('MPESA_CALLBACK_BASE_URL', default='')
+MPESA_CALLBACK_SECRET = config('MPESA_CALLBACK_SECRET', default='')
 
 
 # Logging - shows SMS failures and other app errors in the server window

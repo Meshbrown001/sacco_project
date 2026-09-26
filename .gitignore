@@ -18,3 +18,9 @@ db.sqlite3
 
 # macOS
 .DS_Store
+
+
+# Local notes and images that must never be committed
+MPESA_CALLBACK_SECRET.txt
+*.txt.secret
+whats*.jpeg
