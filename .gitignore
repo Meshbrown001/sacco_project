@@ -24,3 +24,5 @@ db.sqlite3
 MPESA_CALLBACK_SECRET.txt
 *.txt.secret
 whats*.jpeg
+
+private/
