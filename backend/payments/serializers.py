@@ -1,0 +1,38 @@
+from rest_framework import serializers
+
+from accounts.serializers import normalize_kenyan_phone
+from .models import MpesaTransaction
+from .services import status_message
+
+
+class InitiatePaymentSerializer(serializers.Serializer):
+    """Checks the amount and phone number a member submits."""
+    amount = serializers.IntegerField(
+        min_value=1,
+        max_value=250000,
+        error_messages={
+            "invalid": "Enter a whole number of shillings.",
+            "min_value": "The amount must be at least KES 1.",
+            "max_value": "M-Pesa allows at most KES 250,000 per payment.",
+        },
+    )
+    phone_number = serializers.CharField()
+
+    def validate_phone_number(self, value):
+        return normalize_kenyan_phone(value)
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    """What the dashboard sees about a payment."""
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MpesaTransaction
+        fields = [
+            "id", "amount", "phone_number", "status", "status_label",
+            "message", "mpesa_receipt", "transaction_date", "created_at",
+        ]
+
+    def get_message(self, obj):
+        return status_message(obj)
