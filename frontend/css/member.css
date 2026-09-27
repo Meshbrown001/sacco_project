@@ -1,0 +1,317 @@
+/* ------------------------------------------------------------------
+   member.css - member dashboard
+   Green and black for content, orange for what needs attention,
+   red only for errors.
+   ------------------------------------------------------------------ */
+
+:root {
+  --green-dark: #1b5e20;
+  --green: #2e7d32;
+  --green-light: #e8f5e9;
+  --orange: #e65100;
+  --orange-mid: #ef6c00;
+  --orange-light: #fff3e0;
+  --black: #111111;
+  --grey: #555555;
+  --grey-light: #eeeeee;
+  --border: #dfe7df;
+  --bg: #f4f7f4;
+  --white: #ffffff;
+  --red: #c62828;
+  --red-light: #fdecea;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  color: var(--black);
+  background: var(--bg);
+}
+
+/* ----- Top bar ----------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--black);
+  border-bottom: 3px solid var(--green);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--green);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.brand-name { color: var(--white); font-size: 17px; font-weight: 600; }
+
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.welcome { color: #d7e8d8; font-size: 13px; }
+
+/* ----- Buttons ----------------------------------------------------- */
+
+.btn {
+  border: none;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:disabled { background: #9e9e9e; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid #4b4b4b;
+}
+.btn-ghost:hover { border-color: var(--green); background: #1d1d1d; }
+
+.btn-pay { background: var(--orange-mid); color: var(--white); }
+.btn-pay:hover:not(:disabled) { background: var(--orange); }
+
+.btn-block { width: 100%; margin-top: 16px; }
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--grey);
+  cursor: pointer;
+}
+.icon-btn:hover { color: var(--black); }
+
+/* ----- Layout ------------------------------------------------------ */
+
+.dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.alert {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.alert:empty { display: none; }
+.alert-error { background: var(--red-light); color: var(--red); border-left: 4px solid var(--red); }
+.alert-success { background: var(--green-light); color: var(--green-dark); border-left: 4px solid var(--green); }
+
+/* ----- Summary cards ----------------------------------------------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 16px 18px;
+  border-top: 4px solid var(--green);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--grey);
+}
+
+.card .big-number { margin: 0; font-size: 24px; font-weight: 700; color: var(--black); }
+.card .card-note { margin: 6px 0 0; font-size: 12px; color: var(--grey); }
+
+.card.attention { border-top-color: var(--orange-mid); }
+.card.attention .big-number { color: var(--orange); }
+.card.clear .big-number { color: var(--green-dark); }
+
+/* ----- Panels and tables ------------------------------------------- */
+
+.panel {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel h2 { margin: 0; font-size: 16px; color: var(--green-dark); }
+.muted { margin: 4px 0 0; font-size: 12px; color: var(--grey); }
+
+.table-wrap { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--grey);
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--grey-light);
+  vertical-align: top;
+}
+
+th.num, td.num { text-align: right; white-space: nowrap; }
+
+tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+tfoot .owed { color: var(--orange); }
+
+.sub-note { display: block; margin-top: 3px; font-size: 11px; color: var(--grey); }
+
+.empty-note { margin: 10px 0 0; font-size: 13px; color: var(--grey); font-style: italic; }
+
+/* ----- Status badges ----------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-green { background: var(--green-light); color: var(--green-dark); }
+.badge-orange { background: var(--orange-light); color: var(--orange); }
+.badge-dark { background: var(--black); color: var(--white); }
+.badge-grey { background: var(--grey-light); color: var(--grey); }
+
+/* ----- Payment panel ----------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 16px 16px;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 400px;
+  background: var(--white);
+  border-radius: 10px;
+  border-top: 4px solid var(--orange-mid);
+  padding: 18px 22px 22px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.modal h2 { margin: 0; font-size: 17px; color: var(--black); }
+
+.modal form { display: flex; flex-direction: column; }
+
+.modal label { margin: 12px 0 4px; font-size: 13px; font-weight: 600; }
+
+.modal input {
+  padding: 9px 10px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.modal input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.15);
+}
+
+.modal input.invalid { border-color: var(--red); }
+
+.hint { margin-top: 4px; font-size: 11px; color: var(--grey); }
+.field-error { margin-top: 3px; font-size: 12px; color: var(--red); }
+.field-error:empty { display: none; }
+
+.pay-status {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.pay-status.waiting { background: var(--orange-light); color: var(--orange); }
+.pay-status.success { background: var(--green-light); color: var(--green-dark); }
+.pay-status.error { background: var(--red-light); color: var(--red); }
+
+.pay-status.waiting::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 2px solid var(--orange-mid);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ----- Small screens ----------------------------------------------- */
+
+@media (max-width: 600px) {
+  .topbar { padding: 10px 14px; }
+  .brand-name { font-size: 14px; }
+  .welcome { display: none; }
+  .panel { padding: 14px; }
+  .panel-head { flex-direction: column; }
+  .panel-head .btn-pay { width: 100%; }
+  .card .big-number { font-size: 21px; }
+}

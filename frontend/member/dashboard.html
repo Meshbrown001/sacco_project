@@ -2,73 +2,177 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Member Dashboard</title>
-  <link rel="stylesheet" href="../css/dashboard.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Member Dashboard | Nyikwa Abiya Welfare</title>
+  <link rel="stylesheet" href="../css/member.css">
 </head>
 <body>
   <header class="topbar">
-    <h1>Nyikwa Abiya Welfare</h1>
+    <div class="brand">
+      <span class="brand-mark">NA</span>
+      <span class="brand-name">Nyikwa Abiya Welfare</span>
+    </div>
     <div class="topbar-right">
-      <span id="welcome"></span>
-      <button id="logout-btn">Log out</button>
+      <span id="welcome" class="welcome"></span>
+      <button id="logout-btn" class="btn btn-ghost" type="button">Log out</button>
     </div>
   </header>
 
   <main class="dashboard">
-    <p id="error-message" class="error"></p>
+    <p id="error-message" class="alert alert-error" role="alert"></p>
+    <p id="notice-message" class="alert alert-success" role="status"></p>
 
+    <!-- Summary -->
     <section class="cards">
-      <div class="card">
-        <h3>Wallet Balance</h3>
-        <p class="big-number" id="wallet-balance">—</p>
-      </div>
-      <div class="card">
-        <h3>Current Monthly Amount</h3>
-        <p class="big-number" id="monthly-amount">—</p>
-      </div>
-      <div class="card debt-card">
+      <div class="card" id="owed-card">
         <h3>Total You Owe</h3>
         <p class="big-number" id="total-owed">—</p>
-        <p class="debt-detail" id="debt-detail"></p>
+        <p class="card-note" id="owed-note"></p>
+      </div>
+      <div class="card">
+        <h3 id="month-title">This Month</h3>
+        <p class="big-number" id="month-balance">—</p>
+        <p class="card-note" id="month-note"></p>
+      </div>
+      <div class="card">
+        <h3>Wallet Credit</h3>
+        <p class="big-number" id="wallet-credit">—</p>
+        <p class="card-note">Pays coming months automatically.</p>
+      </div>
+      <div class="card">
+        <h3>Unpaid Penalties</h3>
+        <p class="big-number" id="penalty-total">—</p>
+        <p class="card-note" id="penalty-rule"></p>
       </div>
     </section>
 
-    <section class="table-section">
-      <h2>My Monthly Contributions</h2>
-      <table id="contributions-table">
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th>Amount Paid</th>
-            <th>Date Paid</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <p id="no-contributions" class="empty-note" style="display:none;">
-        No contributions recorded yet.
-      </p>
+    <!-- What you owe -->
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>What You Owe</h2>
+          <p class="muted">Payments clear the oldest month first, the penalty before the contribution.</p>
+        </div>
+        <button id="pay-btn" class="btn btn-pay" type="button">Make Payment</button>
+      </div>
+      <div class="table-wrap">
+        <table id="breakdown-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="num">Contribution</th>
+              <th class="num">Penalty</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot></tfoot>
+        </table>
+      </div>
+      <p id="no-debt" class="empty-note" hidden>Nothing owed. You are fully up to date.</p>
     </section>
 
-    <section class="table-section">
-      <h2>Penalties Charged</h2>
-      <table id="penalties-table">
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th>Amount</th>
-            <th>Date Charged</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <p id="no-penalties" class="empty-note" style="display:none;">
-        No penalties. Good standing.
-      </p>
+    <!-- Contributions -->
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>My Monthly Contributions</h2>
+          <p class="muted">A month is due by midnight on its last day.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="contributions-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="num">Amount Due</th>
+              <th class="num">Paid</th>
+              <th class="num">Balance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="no-contributions" class="empty-note" hidden>No contributions recorded yet.</p>
+    </section>
+
+    <!-- Penalties -->
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Penalties</h2>
+          <p class="muted" id="penalty-explainer"></p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="penalties-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Reason</th>
+              <th class="num">Amount</th>
+              <th class="num">Paid</th>
+              <th class="num">Balance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="no-penalties" class="empty-note" hidden>No penalties. Good standing.</p>
+    </section>
+
+    <!-- Payments -->
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Recent Payments</h2>
+          <p class="muted">Your last ten M-Pesa payments.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="payments-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th class="num">Amount</th>
+              <th>M-Pesa Receipt</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="no-payments" class="empty-note" hidden>No payments yet.</p>
     </section>
   </main>
+
+  <!-- Payment panel -->
+  <div id="pay-overlay" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
+      <div class="modal-head">
+        <h2 id="pay-title">Make a Payment</h2>
+        <button id="pay-close" class="icon-btn" type="button" aria-label="Close">&times;</button>
+      </div>
+
+      <form id="pay-form" novalidate>
+        <label for="pay-amount">Amount (KES)</label>
+        <input id="pay-amount" type="number" inputmode="numeric" min="1" max="250000" step="1" required>
+        <small class="hint" id="pay-amount-hint"></small>
+        <small class="field-error" id="error-amount"></small>
+
+        <label for="pay-phone">M-Pesa phone number</label>
+        <input id="pay-phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" autocomplete="tel" required>
+        <small class="hint">You may pay from any Safaricom number. The money still goes to your account.</small>
+        <small class="field-error" id="error-phone_number"></small>
+
+        <p id="pay-status" class="pay-status" role="status" hidden></p>
+
+        <button type="submit" id="pay-send" class="btn btn-pay btn-block">Send</button>
+      </form>
+    </div>
+  </div>
 
   <script src="../js/api.js"></script>
   <script src="../js/member.js"></script>

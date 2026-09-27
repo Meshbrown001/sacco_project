@@ -5,6 +5,8 @@ Payment flow:
   3. refresh_status    - if the callback is late, asks Safaricom directly.
 
 A payment credits the wallet exactly once, whichever of 2 or 3 confirms it first.
+If 3 wins, the wallet entry gets a placeholder reference (CHK-...), and a late
+callback from 2 replaces it with the real M-Pesa receipt.
 """
 
 import hmac
@@ -16,6 +18,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from contributions.models import WalletEntry
 from contributions.services import record_payment
 from core.models import PaymentSettings
 from .daraja import DarajaError, stk_push, stk_query
@@ -78,6 +81,11 @@ def status_message(tx):
     return tx.result_desc or "The payment did not go through."
 
 
+def placeholder_reference(checkout_request_id):
+    """The wallet reference used when a payment is confirmed before its receipt arrives."""
+    return f"CHK-{checkout_request_id}"
+
+
 # ---------------------------------------------------------------------------
 # 1. Starting a payment
 # ---------------------------------------------------------------------------
@@ -129,7 +137,7 @@ def _credit_once(tx, amount, receipt, completed_at):
     """Credits the wallet unless this transaction already did. Caller holds a lock on tx."""
     if tx.credited:
         return
-    reference = receipt or f"CHK-{tx.checkout_request_id}"
+    reference = receipt or placeholder_reference(tx.checkout_request_id)
     record_payment(
         tx.member,
         amount,
@@ -138,6 +146,23 @@ def _credit_once(tx, amount, receipt, completed_at):
         description=f"M-Pesa payment from +{tx.phone_number}",
     )
     tx.credited = True
+
+
+def _attach_receipt(tx, receipt, completed_at):
+    """
+    Puts the real receipt, and Safaricom's completion time, on a wallet
+    entry that a status check credited earlier with a placeholder.
+    """
+    if not receipt:
+        return
+    updates = {"reference": receipt}
+    if completed_at:
+        updates["effective_at"] = completed_at
+    changed = WalletEntry.objects.filter(
+        reference=placeholder_reference(tx.checkout_request_id),
+    ).update(**updates)
+    if changed:
+        logger.info("Late receipt %s attached to tx %s", receipt, tx.pk)
 
 
 def _parse_metadata(items):
@@ -186,7 +211,11 @@ def handle_callback(payload):
             tx.mpesa_receipt = receipt or tx.mpesa_receipt
             tx.transaction_date = completed_at or tx.transaction_date
             tx.status = Status.SUCCESS
+
+            already_credited = tx.credited
             _credit_once(tx, amount, receipt, completed_at)
+            if already_credited:
+                _attach_receipt(tx, receipt, completed_at)
         elif tx.status != Status.SUCCESS:
             tx.status = RESULT_STATUS.get(code, Status.FAILED)
 
