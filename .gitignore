@@ -26,3 +26,5 @@ MPESA_CALLBACK_SECRET.txt
 whats*.jpeg
 
 private/
+
+backend/logs/
