@@ -1,24 +1,42 @@
 import logging
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import OTPCode
-from .otp import OTPCooldownError, OTPError, issue_otp, mask_phone, verify_otp
+from .otp import (
+    OTPCooldownError,
+    OTPDeliveryError,
+    OTPError,
+    available_channels,
+    issue_otp,
+    mask_phone,
+    verify_otp,
+)
 from .serializers import (
     CustomTokenObtainPairSerializer,
     MemberRegistrationSerializer,
     OTPCodeSerializer,
+    PasswordResetCompleteSerializer,
+    PasswordResetSendSerializer,
+    PasswordResetStartSerializer,
+    PasswordResetVerifySerializer,
     UserSerializer,
 )
 from .sms import SMSError
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class MemberRegisterView(generics.CreateAPIView):
@@ -70,7 +88,6 @@ class MyProfileView(APIView):
     """
     Returns the logged-in user's own profile info.
     GET /api/accounts/me/
-    Requires a valid access token.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -84,7 +101,6 @@ class LogoutView(APIView):
     Logs the user out by blacklisting their refresh token.
     POST /api/accounts/logout/
     Body: {"refresh": "<refresh token>"}
-    Requires a valid access token.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -104,7 +120,6 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Stop one user from logging out another user's session.
         if str(token.get("user_id")) != str(request.user.pk):
             return Response(
                 {"detail": "Token does not belong to this user."},
@@ -112,17 +127,13 @@ class LogoutView(APIView):
             )
 
         token.blacklist()
-        return Response(
-            {"detail": "Logged out successfully."},
-            status=status.HTTP_200_OK,
-        )
+        return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 
 class ResendPhoneOTPView(APIView):
     """
     Sends a new phone verification code.
     POST /api/accounts/verify-phone/resend/
-    Requires a valid access token.
     """
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -143,7 +154,7 @@ class ResendPhoneOTPView(APIView):
                 {"detail": str(exc), "retry_after": exc.seconds_remaining},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        except SMSError:
+        except (OTPDeliveryError, SMSError):
             logger.exception("SMS failed for user %s", user.pk)
             return Response(
                 {"detail": "We could not send the code. Try again shortly."},
@@ -160,8 +171,6 @@ class VerifyPhoneView(APIView):
     """
     Confirms the phone number with the SMS code.
     POST /api/accounts/verify-phone/
-    Body: {"code": "123456"}
-    Requires a valid access token.
     """
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -179,11 +188,7 @@ class VerifyPhoneView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            verify_otp(
-                user,
-                OTPCode.Purpose.PHONE_VERIFICATION,
-                serializer.validated_data["code"],
-            )
+            verify_otp(user, OTPCode.Purpose.PHONE_VERIFICATION, serializer.validated_data["code"])
         except OTPError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -193,3 +198,156 @@ class VerifyPhoneView(APIView):
             {"detail": "Phone number verified.", "phone_verified": True},
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# Forgot password
+#   1. start    - username in, the account's hidden contacts out
+#   2. send     - a code goes to the chosen registered contact
+#   3. verify   - a correct code returns a short-lived reset token
+#   4. complete - the reset token and new password set the password
+# ---------------------------------------------------------------------------
+
+NO_ACCOUNT = "No active account uses that username."
+
+
+def get_reset_user(username):
+    return User.objects.filter(username__iexact=username.strip(), is_active=True).first()
+
+
+class PasswordResetStartView(APIView):
+    """
+    POST /api/accounts/password-reset/start/
+    Body: {"username": "bnjeri"}
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    def post(self, request):
+        serializer = PasswordResetStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_reset_user(serializer.validated_data["username"])
+        if user is None:
+            return Response({"detail": NO_ACCOUNT}, status=status.HTTP_404_NOT_FOUND)
+
+        channels = available_channels(user)
+        if not channels:
+            return Response(
+                {"detail": "This account has no phone number or email on record. Please contact the SACCO office."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"username": user.username, "channels": channels})
+
+
+class PasswordResetSendView(APIView):
+    """
+    POST /api/accounts/password-reset/send/
+    Body: {"username": "bnjeri", "channel": "sms" or "email"}
+    The code goes only to the contact registered on the account.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    def post(self, request):
+        serializer = PasswordResetSendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_reset_user(serializer.validated_data["username"])
+        if user is None:
+            return Response({"detail": NO_ACCOUNT}, status=status.HTTP_404_NOT_FOUND)
+
+        channel = serializer.validated_data["channel"]
+        if channel not in [c["channel"] for c in available_channels(user)]:
+            return Response(
+                {"detail": "That delivery method is not registered on this account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            otp = issue_otp(user, OTPCode.Purpose.PASSWORD_RESET, channel)
+        except OTPCooldownError as exc:
+            return Response(
+                {"detail": str(exc), "retry_after": exc.seconds_remaining},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except OTPError as exc:
+            logger.warning("Password reset code not sent for user %s: %s", user.pk, exc)
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        return Response({
+            "channel": channel,
+            "sent_to": otp.sent_to,
+            "expires_at": otp.expires_at.isoformat(),
+            "expires_in": int((otp.expires_at - otp.created_at).total_seconds()),
+        })
+
+
+class PasswordResetVerifyView(APIView):
+    """
+    POST /api/accounts/password-reset/verify/
+    Body: {"username": "bnjeri", "code": "123456"}
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "otp_verify"
+
+    def post(self, request):
+        serializer = PasswordResetVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = get_reset_user(serializer.validated_data["username"])
+        if user is None:
+            return Response({"detail": NO_ACCOUNT}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            verify_otp(user, OTPCode.Purpose.PASSWORD_RESET, serializer.validated_data["code"])
+        except OTPError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Valid for PASSWORD_RESET_TIMEOUT, and useless once the password changes.
+        return Response({"reset_token": default_token_generator.make_token(user)})
+
+
+class PasswordResetCompleteView(APIView):
+    """
+    POST /api/accounts/password-reset/complete/
+    Body: {"username", "reset_token", "new_password", "new_password2"}
+    Sets the password and logs the account out everywhere.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    def post(self, request):
+        serializer = PasswordResetCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = get_reset_user(data["username"])
+        if user is None or not default_token_generator.check_token(user, data["reset_token"]):
+            return Response(
+                {"detail": "This reset session has expired. Please start again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(data["new_password"], user=user)
+        except DjangoValidationError as exc:
+            return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(data["new_password"])
+        user.save(update_fields=["password"])
+
+        # Log out every existing session, since someone else may know the old password.
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+        OTPCode.objects.filter(
+            user=user, purpose=OTPCode.Purpose.PASSWORD_RESET, is_used=False,
+        ).update(is_used=True)
+
+        logger.info("Password reset completed for user %s", user.pk)
+        return Response({"detail": "Your password has been changed. You can now log in."})

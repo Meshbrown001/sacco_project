@@ -136,8 +136,50 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class OTPCodeSerializer(serializers.Serializer):
-    """Validates a 6-digit SMS code. Reused by forgot password."""
+    """Validates a 6-digit SMS code. Used by phone verification."""
     code = serializers.RegexField(
         r"^\d{6}$",
         error_messages={"invalid": "Enter the 6-digit code."},
     )
+
+
+# ---------------------------------------------------------------------------
+# Forgot password
+# The user never supplies a phone number or email here: the code goes only
+# to a contact already registered on the account.
+# ---------------------------------------------------------------------------
+
+class PasswordResetStartSerializer(serializers.Serializer):
+    """Step 1: the username of the account to reset."""
+    username = serializers.CharField()
+
+
+class PasswordResetSendSerializer(serializers.Serializer):
+    """Step 2: which registered contact receives the code."""
+    username = serializers.CharField()
+    channel = serializers.ChoiceField(
+        choices=["sms", "email"],
+        error_messages={"invalid_choice": "Choose SMS or email."},
+    )
+
+
+class PasswordResetVerifySerializer(serializers.Serializer):
+    """Step 3: the 6-digit code the user received."""
+    username = serializers.CharField()
+    code = serializers.RegexField(
+        r"^\d{6}$",
+        error_messages={"invalid": "Enter the 6-digit code."},
+    )
+
+
+class PasswordResetCompleteSerializer(serializers.Serializer):
+    """Step 4: the new password, typed twice."""
+    username = serializers.CharField()
+    reset_token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password2 = serializers.CharField(write_only=True, style={"input_type": "password"})
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password2"]:
+            raise serializers.ValidationError({"new_password2": "Passwords do not match."})
+        return attrs

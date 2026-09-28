@@ -1,26 +1,36 @@
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
 from .models import OTPCode
-from .sms import send_sms
+from .sms import SMSError, send_sms
 
 OTP_LENGTH = 6
 OTP_EXPIRY = timedelta(minutes=5)
 MAX_ATTEMPTS = 5
 RESEND_COOLDOWN = timedelta(seconds=60)
 
+CHANNEL_SMS = "sms"
+CHANNEL_EMAIL = "email"
+
 MESSAGES = {
     OTPCode.Purpose.PHONE_VERIFICATION: (
-        "Your SACCO verification code is {code}. It expires in 5 minutes."
+        "Your Nyikwa Abiya Welfare verification code is {code}. It expires in 5 minutes."
     ),
     OTPCode.Purpose.PASSWORD_RESET: (
-        "Your SACCO password reset code is {code}. It expires in 5 minutes. "
-        "If you did not request it, ignore this message."
+        "Your Nyikwa Abiya Welfare password reset code is {code}. It expires in 5 minutes. "
+        "If you did not ask to reset your password, ignore this message."
     ),
+}
+
+EMAIL_SUBJECTS = {
+    OTPCode.Purpose.PHONE_VERIFICATION: "Your verification code",
+    OTPCode.Purpose.PASSWORD_RESET: "Your password reset code",
 }
 
 
@@ -36,6 +46,10 @@ class OTPCooldownError(OTPError):
         )
 
 
+class OTPDeliveryError(OTPError):
+    """The code could not be sent by SMS or email."""
+
+
 def mask_phone(phone_number):
     """254712345678 becomes +2547*****678."""
     if not phone_number or len(phone_number) < 7:
@@ -43,8 +57,61 @@ def mask_phone(phone_number):
     return f"+{phone_number[:4]}*****{phone_number[-3:]}"
 
 
-def issue_otp(user, purpose):
-    """Creates a fresh code, cancels older ones, and sends it by SMS."""
+def mask_email(email):
+    """brenda.njeri@example.com becomes b***@example.com."""
+    name, _, domain = (email or "").partition("@")
+    if not name or not domain:
+        return "your email"
+    return f"{name[0]}***@{domain}"
+
+
+def available_channels(user):
+    """The contacts registered to this account, partly hidden, for the user to choose from."""
+    channels = []
+    if user.phone_number:
+        channels.append({"channel": CHANNEL_SMS, "destination": mask_phone(user.phone_number)})
+    if user.email:
+        channels.append({"channel": CHANNEL_EMAIL, "destination": mask_email(user.email)})
+    return channels
+
+
+def _deliver(user, channel, purpose, code):
+    """Sends the code to the account's own registered contact. Returns the hidden destination."""
+    message = MESSAGES[purpose].format(code=code)
+
+    if channel == CHANNEL_EMAIL:
+        if not user.email:
+            raise OTPDeliveryError("This account has no email address.")
+        try:
+            send_mail(
+                subject=f"Nyikwa Abiya Welfare: {EMAIL_SUBJECTS[purpose]}",
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as exc:
+            raise OTPDeliveryError("We could not send the email. Please try again shortly.") from exc
+        return mask_email(user.email)
+
+    if channel == CHANNEL_SMS:
+        if not user.phone_number:
+            raise OTPDeliveryError("This account has no phone number.")
+        try:
+            send_sms(user.phone_number, message)
+        except SMSError as exc:
+            raise OTPDeliveryError("We could not send the SMS. Please try again shortly.") from exc
+        return mask_phone(user.phone_number)
+
+    raise OTPDeliveryError("Unknown delivery method.")
+
+
+def issue_otp(user, purpose, channel=CHANNEL_SMS):
+    """
+    Creates a fresh code, cancels older ones, and sends it to the account's
+    registered phone or email. The returned code carries `sent_to`, the
+    hidden destination, for showing to the user.
+    """
     now = timezone.now()
 
     latest = (
@@ -67,9 +134,9 @@ def issue_otp(user, purpose):
     )
 
     try:
-        send_sms(user.phone_number, MESSAGES[purpose].format(code=code))
+        otp.sent_to = _deliver(user, channel, purpose, code)
     except Exception:
-        otp.delete()  # a code the member never received should not block a resend
+        otp.delete()  # a code the user never received should not block a resend
         raise
     return otp
 
