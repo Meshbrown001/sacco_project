@@ -1,127 +1,460 @@
-// Secretary monthly lists page.
+// ---------------------------------------------------------------------------
+// secretary.js - monthly contribution lists. Needs api.js loaded first.
+// ---------------------------------------------------------------------------
 
-async function init() {
+const SACCO_NAME = "Nyikwa Abiya Welfare";
+
+const OTHER_PAGES = {
+  member: "../../member/dashboard.html",
+  treasurer: "../treasurer/account_overview.html",
+  chairperson: "../chairperson/settings.html",
+};
+
+const STATUS_TEXT = {
+  paid: "Paid",
+  partial: "Partial",
+  unpaid: "Unpaid",
+  overdue: "Overdue",
+};
+
+const PENALTY_TEXT = {
+  paid: "Paid",
+  "part-paid": "Part paid",
+  unpaid: "Unpaid",
+  waived: "Waived",
+};
+
+let yearsData = [];        // [{year, months: [{month, name, label}]}]
+let monthData = null;      // the loaded month's full response
+let visibleMembers = [];   // members after the search filter
+let requestCounter = 0;    // ignores late answers when months change quickly
+
+
+// ----- Small helpers -------------------------------------------------------
+
+function money(value) {
+  const n = Number(value || 0);
+  return "KES " + n.toLocaleString("en-KE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function shortDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-KE", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function cell(row, content, className) {
+  const td = el("td", null, className);
+  if (content instanceof Node) {
+    td.appendChild(content);
+  } else {
+    td.textContent = content;
+  }
+  row.appendChild(td);
+  return td;
+}
+
+function setText(id, text) {
+  document.getElementById(id).textContent = text;
+}
+
+function showWarning(message) {
+  setText("warning-message", message || "");
+}
+
+function sum(rows, pick) {
+  return rows.reduce(function (total, row) { return total + Number(pick(row) || 0); }, 0);
+}
+
+
+// ----- Page guard ----------------------------------------------------------
+
+function guardPage() {
   if (!getAccessToken()) {
-    window.location.href = "../../login.html";
-    return;
+    goToLogin();
+    return false;
   }
-
-  const welcome = document.getElementById("welcome");
-  welcome.textContent = "Hello, " + (localStorage.getItem("username") || "");
-
-  await loadMonths();
+  const role = getRole();
+  if (role && role !== "secretary") {
+    window.location.href = OTHER_PAGES[role] || "../../login.html";
+    return false;
+  }
+  return true;
 }
 
-async function loadMonths() {
-  const picker = document.getElementById("month-picker");
-  const noMonths = document.getElementById("no-months");
-  const errorBox = document.getElementById("error-message");
+function handleRequestError(err, fallback) {
+  if (err.status === 401) {
+    goToLogin();
+    return;
+  }
+  if (err.status === 403) {
+    showWarning("This page is for the secretary only.");
+    return;
+  }
+  showWarning((err.data && err.data.detail) || fallback);
+}
 
+
+// ----- Year and month dropdowns --------------------------------------------
+
+async function loadMonthChoices() {
+  let data;
   try {
-    const data = await apiRequest("/contributions/secretary/months/", "GET");
-    const months = data.months || [];
-
-    if (months.length === 0) {
-      noMonths.style.display = "block";
-      return;
-    }
-
-    months.forEach(function (m) {
-      const opt = document.createElement("option");
-      opt.value = m.month;
-      opt.textContent = m.label;
-      picker.appendChild(opt);
-    });
+    data = await apiRequest("/contributions/secretary/months/", "GET");
   } catch (err) {
-    if (err.status === 401) {
-      window.location.href = "../../login.html";
-      return;
-    }
-    if (err.status === 403) {
-      errorBox.textContent = "This page is for the secretary only.";
-      return;
-    }
-    errorBox.textContent = "Could not load months. Please try again.";
-  }
-}
-
-async function loadMonthDetail(month) {
-  const errorBox = document.getElementById("error-message");
-  const listSection = document.getElementById("list-section");
-  const penaltySection = document.getElementById("penalty-section");
-
-  if (!month) {
-    listSection.style.display = "none";
-    penaltySection.style.display = "none";
+    handleRequestError(err, "Could not load the list of months.");
     return;
   }
 
+  yearsData = data.years || [];
+  if (!yearsData.length) {
+    setText("month-title", "No months on record yet");
+    return;
+  }
+
+  // Start on the month in the address bar, if any, otherwise the current month.
+  const fromUrl = new URLSearchParams(window.location.search).get("month");
+  const wanted = findMonth(fromUrl) ? fromUrl : data.current;
+
+  const yearSelect = document.getElementById("year-select");
+  yearSelect.innerHTML = "";
+  yearsData.forEach(function (y) {
+    yearSelect.appendChild(new Option(String(y.year), String(y.year)));
+  });
+
+  yearSelect.value = wanted.slice(0, 4);
+  fillMonthSelect(yearSelect.value, wanted);
+  loadMonth(document.getElementById("month-select").value);
+}
+
+function findMonth(monthIso) {
+  if (!monthIso) return null;
+  for (const y of yearsData) {
+    const hit = y.months.find(function (m) { return m.month === monthIso; });
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function fillMonthSelect(year, preferredMonth) {
+  const monthSelect = document.getElementById("month-select");
+  const entry = yearsData.find(function (y) { return String(y.year) === String(year); });
+  monthSelect.innerHTML = "";
+  if (!entry) return;
+
+  entry.months.forEach(function (m) {
+    monthSelect.appendChild(new Option(m.name, m.month));
+  });
+
+  const hasPreferred = entry.months.some(function (m) { return m.month === preferredMonth; });
+  monthSelect.value = hasPreferred ? preferredMonth : entry.months[0].month;
+}
+
+
+// ----- Loading one month ---------------------------------------------------
+
+async function loadMonth(monthIso) {
+  if (!monthIso) return;
+  const requestId = ++requestCounter;
+
+  setText("month-title", "Loading...");
+  showWarning("");
+
+  // Keep the chosen month in the address bar, so a refresh stays on it.
+  const url = new URL(window.location.href);
+  url.searchParams.set("month", monthIso);
+  window.history.replaceState(null, "", url);
+
+  let data;
   try {
-    const data = await apiRequest(
-      "/contributions/secretary/month/?month=" + encodeURIComponent(month),
-      "GET"
+    data = await apiRequest("/contributions/secretary/month/?month=" + monthIso, "GET");
+  } catch (err) {
+    if (requestId !== requestCounter) return;
+    handleRequestError(err, "Could not load this month's list.");
+    return;
+  }
+  if (requestId !== requestCounter) return;  // a newer month was chosen meanwhile
+
+  monthData = data;
+  renderMonth();
+}
+
+function renderMonth() {
+  const data = monthData;
+  const summary = data.summary;
+
+  setText("month-title", data.label);
+  const tag = document.getElementById("month-tag");
+  tag.hidden = false;
+  tag.textContent = data.is_current ? "Open: payments still coming in" : "Closed";
+  tag.className = "month-tag " + (data.is_current ? "open" : "closed");
+
+  document.getElementById("summary-cards").hidden = false;
+  setText("sum-members", String(summary.members_count));
+  setText(
+    "sum-members-note",
+    summary.fully_paid_count + " fully paid, " +
+      summary.partial_count + " partial, " +
+      summary.unpaid_count + " not paid"
+  );
+  setText("sum-expected", money(summary.expected));
+  setText("sum-collected", money(summary.collected));
+  setText("sum-outstanding", money(summary.outstanding));
+  setText("sum-pen-charged", money(summary.penalties_charged));
+  setText(
+    "sum-pen-note",
+    summary.waived_penalties_count
+      ? summary.waived_penalties_count + " waived, not counted"
+      : (data.is_current ? "Charged after the month ends" : "")
+  );
+  setText("sum-pen-collected", money(summary.penalties_collected));
+  setText("sum-total", money(summary.total_collected));
+
+  document.getElementById("list-panel").hidden = false;
+  applySearch();
+}
+
+
+// ----- Search and table ----------------------------------------------------
+
+function applySearch() {
+  if (!monthData) return;
+  const term = document.getElementById("search-input").value.trim().toLowerCase();
+
+  visibleMembers = monthData.members.filter(function (m) {
+    if (!term) return true;
+    return (
+      m.name.toLowerCase().includes(term) ||
+      m.username.toLowerCase().includes(term) ||
+      (m.phone || "").includes(term)
     );
+  });
 
-    document.getElementById("month-title").textContent =
-      "Contributions for " + data.label;
-    document.getElementById("month-total").textContent = data.month_total;
-
-    fillMembers(data.members);
-    fillPenalties(data.penalties);
-
-    listSection.style.display = "block";
-    penaltySection.style.display = "block";
-  } catch (err) {
-    if (err.status === 401) {
-      window.location.href = "../../login.html";
-      return;
-    }
-    errorBox.textContent = "Could not load that month. Please try again.";
-  }
+  renderTable(visibleMembers, term);
 }
 
-function fillMembers(rows) {
+function contributionStatusCell(member) {
+  const wrap = document.createElement("span");
+  if (member.fully_paid) {
+    wrap.appendChild(el("span", "✔", "tick"));
+  }
+  wrap.appendChild(el("span", STATUS_TEXT[member.status] || member.status, "badge badge-" + member.status));
+  if (!member.fully_paid && Number(member.amount_paid) > 0) {
+    wrap.appendChild(el("span", money(member.balance) + " owing", "sub-note"));
+  }
+  return wrap;
+}
+
+function penaltyStatusCell(penalty) {
+  const wrap = document.createElement("span");
+  const kind = penalty.state === "part-paid" ? "partial"
+    : penalty.state === "unpaid" ? "overdue"
+    : penalty.state;
+  wrap.appendChild(el("span", PENALTY_TEXT[penalty.state] || penalty.state, "badge badge-" + kind));
+  if (penalty.state === "waived" && penalty.waived_reason) {
+    wrap.appendChild(el("span", penalty.waived_reason, "sub-note"));
+  } else if (penalty.state === "part-paid") {
+    wrap.appendChild(el("span", money(penalty.balance) + " owing", "sub-note"));
+  }
+  return wrap;
+}
+
+function renderTable(rows, term) {
   const body = document.querySelector("#members-table tbody");
+  const foot = document.querySelector("#members-table tfoot");
   body.innerHTML = "";
-  rows.forEach(function (row) {
+  foot.innerHTML = "";
+
+  const total = monthData.members.length;
+  document.getElementById("no-members").hidden = total !== 0;
+  document.getElementById("no-results").hidden = !(total > 0 && rows.length === 0);
+
+  setText(
+    "showing-count",
+    term ? "Showing " + rows.length + " of " + total + " members" : total + " members"
+  );
+
+  rows.forEach(function (m, index) {
     const tr = document.createElement("tr");
-    const datePaid = row.date_paid ? row.date_paid.substring(0, 10) : "—";
-    tr.innerHTML =
-      "<td>" + row.member + "</td>" +
-      "<td>KES " + row.amount_paid + "</td>" +
-      "<td>" + datePaid + "</td>" +
-      "<td class='status-" + row.status + "'>" + row.status + "</td>";
+
+    cell(tr, String(index + 1), "num");
+
+    const nameCell = cell(tr, m.name, "member-name");
+    nameCell.appendChild(el("span", m.username + (m.phone ? " · " + m.phone : ""), "sub-note"));
+
+    cell(tr, money(m.amount_due), "num");
+    cell(tr, money(m.amount_paid), "num");
+    cell(tr, contributionStatusCell(m));
+
+    if (m.penalty) {
+      const waived = m.penalty.state === "waived";
+      cell(tr, waived ? "—" : money(m.penalty.amount), "num group-start");
+      cell(tr, waived ? "—" : money(m.penalty.amount_paid), "num");
+      cell(tr, penaltyStatusCell(m.penalty));
+    } else {
+      cell(tr, "—", "num group-start");
+      cell(tr, "—", "num");
+      cell(tr, monthData.is_current ? "Not yet due" : "None");
+    }
+
+    cell(tr, money(m.total_paid), "num group-start");
+    cell(tr, m.fully_paid ? shortDate(m.date_paid) : "—");
+
     body.appendChild(tr);
   });
-}
 
-function fillPenalties(rows) {
-  const body = document.querySelector("#penalties-table tbody");
-  const noPenalties = document.getElementById("no-penalties");
-  body.innerHTML = "";
-
-  if (!rows || rows.length === 0) {
-    noPenalties.style.display = "block";
-    return;
+  if (rows.length) {
+    const penaltyRows = rows.filter(function (m) { return m.penalty && m.penalty.state !== "waived"; });
+    const tr = document.createElement("tr");
+    cell(tr, "");
+    cell(tr, term ? "Total (shown)" : "Total");
+    cell(tr, money(sum(rows, function (m) { return m.amount_due; })), "num");
+    cell(tr, money(sum(rows, function (m) { return m.amount_paid; })), "num");
+    cell(tr, "");
+    cell(tr, money(sum(penaltyRows, function (m) { return m.penalty.amount; })), "num group-start");
+    cell(tr, money(sum(penaltyRows, function (m) { return m.penalty.amount_paid; })), "num");
+    cell(tr, "");
+    cell(tr, money(sum(rows, function (m) { return m.total_paid; })), "num group-start");
+    cell(tr, "");
+    foot.appendChild(tr);
   }
-  noPenalties.style.display = "none";
-
-  rows.forEach(function (row) {
-    const tr = document.createElement("tr");
-    const dateCharged = row.date_charged ? row.date_charged.substring(0, 10) : "—";
-    const statusText = row.paid ? "paid" : "unpaid";
-    tr.innerHTML =
-      "<td>" + row.member + "</td>" +
-      "<td>KES " + row.amount + "</td>" +
-      "<td>" + dateCharged + "</td>" +
-      "<td class='status-" + statusText + "'>" + statusText + "</td>";
-    body.appendChild(tr);
-  });
 }
 
-document.getElementById("logout-btn").addEventListener("click", logout);
-document.getElementById("month-picker").addEventListener("change", function (e) {
-  loadMonthDetail(e.target.value);
-});
 
-init();
+// ----- Print ---------------------------------------------------------------
+
+function preparePrint() {
+  if (!monthData) return;
+  const term = document.getElementById("search-input").value.trim();
+  setText(
+    "print-month",
+    monthData.label + (term ? " (filtered: \"" + term + "\")" : "") +
+      (monthData.is_current ? ", month still open" : "")
+  );
+  setText("print-date", "Printed " + new Date().toLocaleString("en-KE"));
+}
+
+function printList() {
+  if (!monthData) return;
+  preparePrint();
+  window.print();
+}
+
+
+// ----- CSV download --------------------------------------------------------
+
+function csvField(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+
+function csvRow(values) {
+  return values.map(csvField).join(",");
+}
+
+function plainNumber(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function downloadCsv() {
+  if (!monthData) return;
+  const term = document.getElementById("search-input").value.trim();
+  const rows = visibleMembers;
+  const s = monthData.summary;
+
+  const lines = [
+    csvRow([SACCO_NAME + ": Monthly Contribution List"]),
+    csvRow(["Month", monthData.label + (monthData.is_current ? " (open)" : " (closed)")]),
+    csvRow(["Generated", new Date().toLocaleString("en-KE")]),
+  ];
+  if (term) lines.push(csvRow(["Filtered by", term]));
+  lines.push("");
+
+  lines.push(csvRow([
+    "#", "Member", "Username", "Phone",
+    "Due (KES)", "Paid (KES)", "Balance (KES)", "Contribution Status", "Fully Paid On",
+    "Penalty (KES)", "Penalty Paid (KES)", "Penalty Status",
+    "Total Paid (KES)",
+  ]));
+
+  rows.forEach(function (m, index) {
+    const p = m.penalty;
+    const waived = p && p.state === "waived";
+    lines.push(csvRow([
+      index + 1,
+      m.name,
+      m.username,
+      m.phone,
+      plainNumber(m.amount_due),
+      plainNumber(m.amount_paid),
+      plainNumber(m.balance),
+      STATUS_TEXT[m.status] || m.status,
+      m.fully_paid && m.date_paid ? m.date_paid.slice(0, 10) : "",
+      p && !waived ? plainNumber(p.amount) : "",
+      p && !waived ? plainNumber(p.amount_paid) : "",
+      p ? (PENALTY_TEXT[p.state] || p.state) + (waived && p.waived_reason ? ": " + p.waived_reason : "") : "",
+      plainNumber(m.total_paid),
+    ]));
+  });
+
+  lines.push("");
+  if (term) {
+    lines.push(csvRow(["Totals below cover the whole month, not only the filtered rows."]));
+  }
+  lines.push(csvRow(["Members", s.members_count]));
+  lines.push(csvRow(["Fully paid", s.fully_paid_count]));
+  lines.push(csvRow(["Partial", s.partial_count]));
+  lines.push(csvRow(["Not paid", s.unpaid_count]));
+  lines.push(csvRow(["Contributions expected (KES)", plainNumber(s.expected)]));
+  lines.push(csvRow(["Contributions collected (KES)", plainNumber(s.collected)]));
+  lines.push(csvRow(["Still outstanding (KES)", plainNumber(s.outstanding)]));
+  lines.push(csvRow(["Penalties charged (KES)", plainNumber(s.penalties_charged)]));
+  lines.push(csvRow(["Penalties collected (KES)", plainNumber(s.penalties_collected)]));
+  lines.push(csvRow(["Total received (KES)", plainNumber(s.total_collected)]));
+
+  // The BOM at the start makes Excel read the file as UTF-8.
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "contributions_" + monthData.month.slice(0, 7) + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+
+// ----- Start ---------------------------------------------------------------
+
+if (guardPage()) {
+  setText("welcome", "Hello, " + (localStorage.getItem("username") || ""));
+
+  document.getElementById("logout-btn").addEventListener("click", logout);
+
+  document.getElementById("year-select").addEventListener("change", function (e) {
+    fillMonthSelect(e.target.value, null);
+    loadMonth(document.getElementById("month-select").value);
+  });
+
+  document.getElementById("month-select").addEventListener("change", function (e) {
+    loadMonth(e.target.value);
+  });
+
+  document.getElementById("search-input").addEventListener("input", applySearch);
+  document.getElementById("print-btn").addEventListener("click", printList);
+  document.getElementById("download-btn").addEventListener("click", downloadCsv);
+  window.addEventListener("beforeprint", preparePrint);
+
+  loadMonthChoices();
+}

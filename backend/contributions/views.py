@@ -1,8 +1,7 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
 
 from rest_framework import permissions
 from rest_framework.response import Response
@@ -17,15 +16,28 @@ from .serializers import (
     WalletSerializer,
 )
 from .services import (
+    compute_status,
     current_month_for,
     ensure_months,
     get_contribution_settings,
+    next_month,
     sweep_member,
 )
 
 User = get_user_model()
 ZERO = Decimal("0")
 
+
+def local_phone(phone):
+    """254712345678 -> 0712345678, the way the SACCO writes numbers."""
+    if not phone:
+        return ""
+    return "0" + phone[3:] if phone.startswith("254") else phone
+
+
+# ---------------------------------------------------------------------------
+# Member dashboard
+# ---------------------------------------------------------------------------
 
 class MemberDashboardView(APIView):
     """
@@ -65,7 +77,6 @@ class MemberDashboardView(APIView):
         overdue = [c for c in contributions if c.status == MonthlyContribution.Status.OVERDUE]
         current_row = next((c for c in contributions if c.month == current), None)
 
-        # Debt, month by month, oldest first: the order payments clear it.
         penalty_by_month = {}
         for p in penalties:
             penalty_by_month[p.contribution.month] = (
@@ -126,35 +137,65 @@ class MemberDashboardView(APIView):
         })
 
 
+# ---------------------------------------------------------------------------
+# Secretary: choosing a month
+# ---------------------------------------------------------------------------
+
 class MonthListView(APIView):
     """
-    Returns the distinct months that have any contribution activity,
-    newest first, so the secretary can pick one. Secretary only.
+    The years and months the secretary can pick from, newest first.
+    The current month always appears, even before anyone pays.
+    GET /api/contributions/secretary/months/
+    Secretary only.
     """
     permission_classes = [IsSecretary]
 
     def get(self, request):
-        months = (
-            MonthlyContribution.objects
-            .values_list("month", flat=True)
-            .distinct()
-            .order_by("-month")
+        current = current_month_for()
+        months = set(
+            MonthlyContribution.objects.values_list("month", flat=True).distinct()
         )
-        data = [
-            {"month": m.isoformat(), "label": m.strftime("%B %Y")}
-            for m in months
-        ]
-        return Response({"months": data})
+        months.add(current)
+
+        years = {}
+        for month in sorted(months, reverse=True):
+            years.setdefault(month.year, []).append({
+                "month": month.isoformat(),
+                "name": month.strftime("%B"),
+                "label": month.strftime("%B %Y"),
+            })
+
+        return Response({
+            "current": current.isoformat(),
+            "years": [
+                {"year": year, "months": items}
+                for year, items in sorted(years.items(), reverse=True)
+            ],
+        })
+
+
+# ---------------------------------------------------------------------------
+# Secretary: one month's list
+# ---------------------------------------------------------------------------
+
+def _penalty_state(penalty):
+    if penalty.waived:
+        return "waived"
+    if penalty.paid:
+        return "paid"
+    if penalty.amount_paid > 0:
+        return "part-paid"
+    return "unpaid"
 
 
 class MonthlyListDetailView(APIView):
     """
-    Returns one month's full list: every member, what they paid that
-    month, when, their status, plus the month total and the penalties
-    charged for that month. Secretary only.
+    One month's list: every member who had joined by the end of that
+    month, what the month required, what they paid, the penalty charged
+    for that month and what was paid toward it, plus the month's totals.
 
-    The month is passed as YYYY-MM-01 in the URL query, e.g.
-    /api/contributions/secretary/month/?month=2026-06-01
+    GET /api/contributions/secretary/month/?month=2026-09-01
+    Secretary only.
     """
     permission_classes = [IsSecretary]
 
@@ -169,51 +210,116 @@ class MonthlyListDetailView(APIView):
         except (ValueError, AttributeError):
             return Response({"detail": "Month must be in YYYY-MM-01 format."}, status=400)
 
-        members = User.objects.filter(role=User.Role.MEMBER).order_by("username")
+        current = current_month_for()
+        if month > current:
+            return Response({"detail": "That month has not started yet."}, status=400)
 
-        rows = MonthlyContribution.objects.filter(month=month).select_related("member")
-        row_by_member = {r.member_id: r for r in rows}
+        last_day = next_month(month) - timedelta(days=1)
+        settings_row = get_contribution_settings()
+        default_due = settings_row.monthly_amount if settings_row else ZERO
 
-        member_list = []
-        for member in members:
-            row = row_by_member.get(member.id)
-            full_name = (member.get_full_name() or member.username)
+        rows = {
+            r.member_id: r
+            for r in MonthlyContribution.objects.filter(month=month).select_related("member")
+        }
+        penalties = {}
+        for p in Penalty.objects.filter(contribution__month=month).select_related("contribution"):
+            penalties.setdefault(p.member_id, []).append(p)
+
+        # Members who had joined by the end of the month. Inactive members
+        # appear only if they have a record for this month.
+        candidates = User.objects.filter(
+            role=User.Role.MEMBER,
+            date_joined_sacco__lte=last_day,
+        ).order_by("first_name", "last_name", "username")
+
+        members = []
+        totals = {
+            "expected": ZERO, "collected": ZERO, "outstanding": ZERO,
+            "penalties_charged": ZERO, "penalties_collected": ZERO,
+        }
+        counts = {"paid": 0, "partial": 0, "unpaid": 0, "overdue": 0, "waived": 0}
+
+        for member in candidates:
+            row = rows.get(member.id)
+            if row is None and not member.is_active:
+                continue
+
             if row:
-                member_list.append({
-                    "member": full_name,
-                    "amount_paid": str(row.amount_paid),
-                    "date_paid": row.date_paid.isoformat() if row.date_paid else None,
-                    "status": row.status,
-                })
+                amount_due = row.amount_due
+                amount_paid = row.amount_paid
+                balance = row.balance
+                status = compute_status(row, current)
+                date_paid = row.date_paid.isoformat() if row.date_paid else None
             else:
-                member_list.append({
-                    "member": full_name,
-                    "amount_paid": "0.00",
-                    "date_paid": None,
-                    "status": "unpaid",
-                })
+                # No record yet: the member has done nothing for this month.
+                amount_due = default_due
+                amount_paid = ZERO
+                balance = default_due
+                status = (
+                    MonthlyContribution.Status.OVERDUE if month < current
+                    else MonthlyContribution.Status.UNPAID
+                )
+                date_paid = None
 
-        total = (
-            rows.filter(status=MonthlyContribution.Status.PAID)
-            .aggregate(total=Sum("amount_paid"))["total"]
-            or 0
-        )
+            penalty_data = None
+            penalty_paid = ZERO
+            member_penalties = penalties.get(member.id, [])
+            if member_penalties:
+                p = member_penalties[0]
+                penalty_paid = sum((x.amount_paid for x in member_penalties), ZERO)
+                state = _penalty_state(p)
+                if state == "waived":
+                    counts["waived"] += 1
+                else:
+                    totals["penalties_charged"] += sum((x.amount for x in member_penalties), ZERO)
+                    totals["penalties_collected"] += penalty_paid
+                penalty_data = {
+                    "rate": str(p.rate),
+                    "amount": str(sum((x.amount for x in member_penalties), ZERO)),
+                    "amount_paid": str(penalty_paid),
+                    "balance": str(sum((x.balance for x in member_penalties), ZERO)),
+                    "state": state,
+                    "reason": p.reason,
+                    "waived_reason": p.waived_reason,
+                }
 
-        penalties = Penalty.objects.filter(contribution__month=month).select_related("member")
-        penalty_list = [
-            {
-                "member": (p.member.get_full_name() or p.member.username),
-                "amount": str(p.amount),
-                "paid": p.paid,
-                "date_charged": p.date_charged.isoformat(),
-            }
-            for p in penalties
-        ]
+            counts[status] = counts.get(status, 0) + 1
+            totals["expected"] += amount_due
+            totals["collected"] += amount_paid
+            totals["outstanding"] += balance
+
+            members.append({
+                "member_id": member.id,
+                "name": member.get_full_name() or member.username,
+                "username": member.username,
+                "phone": local_phone(member.phone_number),
+                "amount_due": str(amount_due),
+                "amount_paid": str(amount_paid),
+                "balance": str(balance),
+                "status": status,
+                "fully_paid": status == MonthlyContribution.Status.PAID,
+                "date_paid": date_paid,
+                "penalty": penalty_data,
+                "total_paid": str(amount_paid + penalty_paid),
+            })
 
         return Response({
             "month": month.isoformat(),
             "label": month.strftime("%B %Y"),
-            "members": member_list,
-            "month_total": str(total),
-            "penalties": penalty_list,
+            "is_current": month == current,
+            "members": members,
+            "summary": {
+                "members_count": len(members),
+                "fully_paid_count": counts["paid"],
+                "partial_count": counts["partial"],
+                "unpaid_count": counts["unpaid"] + counts["overdue"],
+                "waived_penalties_count": counts["waived"],
+                "expected": str(totals["expected"]),
+                "collected": str(totals["collected"]),
+                "outstanding": str(totals["outstanding"]),
+                "penalties_charged": str(totals["penalties_charged"]),
+                "penalties_collected": str(totals["penalties_collected"]),
+                "total_collected": str(totals["collected"] + totals["penalties_collected"]),
+            },
         })
