@@ -19,6 +19,11 @@ Special contributions (levies):
  10. A payment aimed at a levy pays its fine first, then the amount.
  11. A payment completed before the deadline that covers the levy cancels
      its fine.
+
+Deactivation:
+ 12. A reactivated member owes nothing for the months while they were
+     deactivated, nor for special contributions whose deadline fell then.
+     Debts from before deactivation stay owed.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -28,6 +33,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.models import AccountDeactivation
 from core.models import ContributionSettings
 from .models import (
     LevyObligation,
@@ -171,6 +177,31 @@ def is_billable_member(member):
     return member.is_active and member.role == User.Role.MEMBER
 
 
+def skipped_months(member, today=None):
+    """
+    Months a member owes nothing for because they were deactivated:
+    strictly after the deactivation month, strictly before the
+    reactivation month. While still deactivated, every month after
+    the deactivation month is skipped.
+    """
+    current = current_month_for(today)
+    months = set()
+    for period in AccountDeactivation.objects.filter(user=member):
+        start = next_month(first_of_month(period.started_on))
+        end = previous_month(first_of_month(period.ended_on)) if period.ended_on else current
+        if start <= end:
+            months.update(months_between(start, end))
+    return months
+
+
+def was_deactivated_on(member, day):
+    """True if the member's account was deactivated on the given day."""
+    for period in AccountDeactivation.objects.filter(user=member):
+        if period.started_on <= day and (period.ended_on is None or day < period.ended_on):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Monthly contributions
 # ---------------------------------------------------------------------------
@@ -179,8 +210,8 @@ def ensure_months(member, today=None):
     """
     Creates a contribution row for every month from the member's joining
     month through the current month, freezing today's amount on each new
-    row, and refreshes every row's status. Returns how many rows turned
-    overdue during this call.
+    row, and refreshes every row's status. Months while the member was
+    deactivated are skipped. Returns how many rows turned overdue.
     """
     settings_row = get_contribution_settings()
     amount = settings_row.monthly_amount if settings_row else ZERO
@@ -189,6 +220,7 @@ def ensure_months(member, today=None):
     if join > current:
         return 0
 
+    skipped = skipped_months(member, today)
     existing = set(
         MonthlyContribution.objects.filter(
             member=member, month__gte=join, month__lte=current,
@@ -202,7 +234,7 @@ def ensure_months(member, today=None):
             status=MonthlyContribution.Status.UNPAID,
         )
         for month in months_between(join, current)
-        if month not in existing
+        if month not in existing and month not in skipped
     ]
     if missing:
         MonthlyContribution.objects.bulk_create(missing, ignore_conflicts=True)
@@ -379,7 +411,8 @@ def create_levy_obligations(levy, today=None):
 def ensure_levy_obligations(member, today=None):
     """
     Gives one member an obligation for every active levy whose deadline
-    falls on or after the day they joined. Returns how many were created.
+    falls on or after the day they joined, except levies whose deadline
+    fell while the member was deactivated. Returns how many were created.
     """
     if not is_billable_member(member):
         return 0
@@ -392,6 +425,8 @@ def ensure_levy_obligations(member, today=None):
 
     new = []
     for levy in levies:
+        if was_deactivated_on(member, levy.deadline):
+            continue
         obligation = LevyObligation(levy=levy, member=member, amount_due=levy.amount)
         obligation.status = compute_levy_status(obligation, today)
         new.append(obligation)

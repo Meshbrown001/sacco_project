@@ -34,9 +34,8 @@ class CustomUser(AbstractUser):
     national_id = models.CharField(max_length=20, unique=True, null=True, blank=True)
     date_joined_sacco = models.DateField(auto_now_add=True)
 
-    # Deactivation record. The is_active flag, inherited from Django,
-    # controls whether the account can log in; these fields record who
-    # deactivated it, when, and why.
+    # The current deactivation, if any. is_active, inherited from Django,
+    # controls login. The full history lives in AccountDeactivation.
     deactivated_at = models.DateTimeField(null=True, blank=True)
     deactivation_reason = models.CharField(max_length=255, blank=True)
     deactivated_by = models.ForeignKey(
@@ -94,3 +93,42 @@ class OTPCode(models.Model):
 
     def __str__(self):
         return f"{self.get_purpose_display()} code for {self.user}"
+
+
+class AccountDeactivation(models.Model):
+    """
+    One period during which an account was deactivated, kept for good.
+    ended_on stays empty while the account is still deactivated.
+
+    For a member, the months strictly after the deactivation month and
+    strictly before the reactivation month are skipped: no contribution
+    is owed for them, and no fine charged.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='deactivations',
+    )
+    started_on = models.DateField()
+    ended_on = models.DateField(null=True, blank=True)
+    reason = models.CharField(max_length=255)
+    deactivated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='+',
+    )
+    reactivated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-started_on', '-id']
+
+    def __str__(self):
+        end = self.ended_on or "still deactivated"
+        return f"{self.user.username}: {self.started_on} to {end}"
