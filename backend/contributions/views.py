@@ -8,8 +8,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsSecretary
-from .models import MemberWallet, MonthlyContribution, Penalty, WalletEntry
+from .models import (
+    LevyObligation,
+    MemberWallet,
+    MonthlyContribution,
+    Penalty,
+    SpecialLevy,
+    WalletEntry,
+)
 from .serializers import (
+    MemberLevySerializer,
     MonthlyContributionSerializer,
     PaymentHistorySerializer,
     PenaltySerializer,
@@ -45,8 +53,8 @@ class MemberDashboardView(APIView):
     the token, so a member can only ever see their own data.
 
     Before answering, it brings the member's record up to date: creates
-    the current month, applies wallet credit, and charges any penalty
-    now due. A penalty therefore shows from 00:00 on the 1st.
+    the current month and any special contribution obligations, applies
+    wallet credit, and charges any penalty or fine now due.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -74,6 +82,12 @@ class MemberDashboardView(APIView):
             .select_related("contribution")
             .order_by("contribution__month", "date_charged")
         )
+        levy_obligations = list(
+            LevyObligation.objects.filter(member=member)
+            .exclude(levy__status=SpecialLevy.Status.CANCELLED)
+            .select_related("levy")
+            .order_by("levy__deadline")
+        )
         overdue = [c for c in contributions if c.status == MonthlyContribution.Status.OVERDUE]
         current_row = next((c for c in contributions if c.month == current), None)
 
@@ -100,7 +114,9 @@ class MemberDashboardView(APIView):
         current_month_due = current_row.balance if current_row else ZERO
         contribution_debt = overdue_contribution_debt + current_month_due
         penalty_debt = sum((p.balance for p in penalties), ZERO)
-        total_owed = contribution_debt + penalty_debt
+        monthly_owed = contribution_debt + penalty_debt
+        special_debt = sum((ob.total_owed for ob in levy_obligations), ZERO)
+        total_owed = monthly_owed + special_debt
 
         payments = (
             WalletEntry.objects.filter(
@@ -124,12 +140,15 @@ class MemberDashboardView(APIView):
             "overdue_months": MonthlyContributionSerializer(overdue, many=True).data,
             "penalties": PenaltySerializer(penalties, many=True).data,
             "debt_breakdown": breakdown,
+            "special_contributions": MemberLevySerializer(levy_obligations, many=True).data,
             "debt_summary": {
                 "overdue_months_count": len(overdue),
                 "overdue_contribution_debt": str(overdue_contribution_debt),
                 "current_month_due": str(current_month_due),
                 "contribution_debt": str(contribution_debt),
                 "penalty_debt": str(penalty_debt),
+                "monthly_owed": str(monthly_owed),
+                "special_contributions_debt": str(special_debt),
                 "total_owed": str(total_owed),
                 "wallet_credit": str(wallet.balance),
             },

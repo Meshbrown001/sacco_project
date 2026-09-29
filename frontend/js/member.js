@@ -80,6 +80,10 @@ function showNotice(message) {
   setText("notice-message", message || "");
 }
 
+function capitalise(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function fillTable(tableId, emptyId, rows, buildRow) {
   const body = document.querySelector("#" + tableId + " tbody");
   const emptyNote = document.getElementById(emptyId);
@@ -140,6 +144,7 @@ function render(data) {
   setText("welcome", "Hello, " + (data.full_name || data.username));
   renderCards(data);
   renderBreakdown(data.debt_breakdown, data.debt_summary);
+  renderLevies(data.special_contributions || []);
   renderContributions(data.contributions);
   renderPenalties(data.penalties, data.penalty_rate);
   renderPayments(data.recent_payments);
@@ -148,6 +153,8 @@ function render(data) {
 function renderCards(data) {
   const summary = data.debt_summary;
   const owed = Number(summary.total_owed);
+  const monthlyOwed = Number(summary.monthly_owed || 0);
+  const specialOwed = Number(summary.special_contributions_debt || 0);
   const owedCard = document.getElementById("owed-card");
 
   setText("total-owed", money(owed));
@@ -155,17 +162,15 @@ function renderCards(data) {
   owedCard.classList.toggle("clear", owed <= 0);
 
   if (owed > 0) {
-    // Only months that have ended count as late. The current month is
-    // still open, so it is described as due, not as unpaid.
-    const late = data.debt_breakdown.filter(function (row) { return !row.is_current; });
     const parts = [];
-    if (Number(summary.penalty_debt) > 0) {
-      parts.push("includes " + money(summary.penalty_debt) + " in penalties");
-    }
+    if (monthlyOwed > 0) parts.push(money(monthlyOwed) + " monthly");
+    if (specialOwed > 0) parts.push(money(specialOwed) + " special contributions");
+
+    const late = data.debt_breakdown.filter(function (row) { return !row.is_current; });
     if (late.length) {
       parts.push("oldest late month: " + late[0].month_label);
-    } else if (data.current_month) {
-      parts.push("due by the end of " + data.current_month.month_label);
+    } else if (monthlyOwed > 0 && data.current_month) {
+      parts.push("month due by the end of " + data.current_month.month_label);
     }
     setText("owed-note", parts.length ? capitalise(parts.join(", ")) + "." : "");
   } else {
@@ -191,10 +196,6 @@ function renderCards(data) {
   setText("penalty-rule", Number(data.penalty_rate) + "% of the contribution per late month.");
 }
 
-function capitalise(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 function renderBreakdown(rows, summary) {
   const foot = document.querySelector("#breakdown-table tfoot");
   foot.innerHTML = "";
@@ -214,17 +215,57 @@ function renderBreakdown(rows, summary) {
     cell(tr, "Total owed");
     cell(tr, money(summary.contribution_debt), "num");
     cell(tr, money(summary.penalty_debt), "num");
-    cell(tr, money(summary.total_owed), "num owed");
+    cell(tr, money(summary.monthly_owed || summary.total_owed), "num owed");
     foot.appendChild(tr);
   }
 }
 
-const CONTRIBUTION_BADGES = {
+const STATUS_BADGES = {
   paid: "green",
   partial: "orange",
   unpaid: "grey",
   overdue: "dark",
 };
+
+function renderLevies(rows) {
+  fillTable("levies-table", "no-levies", rows, function (tr, row) {
+    const reasonCell = cell(tr, row.purpose, "levy-reason");
+    if (row.levy_status === "closed") {
+      reasonCell.appendChild(el("span", "Closed", "tag-closed"));
+    }
+    if (row.description) {
+      reasonCell.appendChild(el("span", row.description, "sub-note"));
+    }
+
+    cell(tr, shortDate(row.deadline));
+    cell(tr, money(row.amount_due), "num");
+    cell(tr, money(row.amount_paid), "num");
+
+    // Fine: the rule before the deadline, then what was charged.
+    const fineCell = document.createElement("span");
+    if (row.fine_waived) {
+      fineCell.appendChild(badge("Waived", "grey"));
+      if (row.fine_waived_reason) fineCell.appendChild(el("span", row.fine_waived_reason, "sub-note"));
+    } else if (Number(row.fine_amount) > 0) {
+      fineCell.appendChild(document.createTextNode(money(row.fine_amount)));
+      fineCell.appendChild(el("span", money(row.fine_amount_paid) + " paid", "sub-note"));
+    } else {
+      fineCell.appendChild(el("span", "If late: " + row.fine_label, "sub-note"));
+    }
+    cell(tr, fineCell);
+
+    cell(tr, money(row.total_owed), "num");
+    cell(tr, badge(row.status_label, STATUS_BADGES[row.status] || "grey"));
+
+    const actionCell = cell(tr, "");
+    if (Number(row.total_owed) > 0) {
+      const button = el("button", "Pay", "btn btn-pay btn-small");
+      button.type = "button";
+      button.addEventListener("click", function () { openPaymentPanel(String(row.id)); });
+      actionCell.appendChild(button);
+    }
+  });
+}
 
 function renderContributions(rows) {
   fillTable("contributions-table", "no-contributions", rows, function (tr, row) {
@@ -232,7 +273,7 @@ function renderContributions(rows) {
     cell(tr, money(row.amount_due), "num");
     cell(tr, money(row.amount_paid), "num");
     cell(tr, money(row.balance), "num");
-    cell(tr, badge(row.status_label, CONTRIBUTION_BADGES[row.status] || "grey"));
+    cell(tr, badge(row.status_label, STATUS_BADGES[row.status] || "grey"));
   });
 }
 
@@ -279,21 +320,71 @@ function renderPayments(rows) {
 
 // ----- Payment panel -------------------------------------------------------
 
-function openPaymentPanel() {
-  const summary = dashboardData ? dashboardData.debt_summary : null;
-  const owed = summary ? Math.ceil(Number(summary.total_owed)) : 0;
-  const monthly = dashboardData ? Math.ceil(Number(dashboardData.current_monthly_amount)) : 0;
+// "" means monthly contributions; otherwise the special contribution's id.
+function fillPaymentTargets(selected) {
+  const select = document.getElementById("pay-target");
+  const summary = dashboardData.debt_summary;
+  select.innerHTML = "";
 
+  const monthlyOwed = Number(summary.monthly_owed || 0);
+  select.appendChild(new Option(
+    "Monthly contributions" + (monthlyOwed > 0 ? " (" + money(monthlyOwed) + " owing)" : ""),
+    ""
+  ));
+
+  (dashboardData.special_contributions || []).forEach(function (levy) {
+    if (Number(levy.total_owed) <= 0) return;
+    select.appendChild(new Option(
+      levy.purpose + " (" + money(levy.total_owed) + " owing)",
+      String(levy.id)
+    ));
+  });
+
+  const exists = Array.from(select.options).some(function (o) { return o.value === selected; });
+  select.value = exists ? selected : "";
+}
+
+function selectedLevy() {
+  const value = document.getElementById("pay-target").value;
+  if (!value) return null;
+  return (dashboardData.special_contributions || []).find(function (levy) {
+    return String(levy.id) === value;
+  }) || null;
+}
+
+function updateAmountForTarget() {
   const amountInput = document.getElementById("pay-amount");
+  const levy = selectedLevy();
+
+  if (levy) {
+    amountInput.value = Math.ceil(Number(levy.total_owed));
+    setText(
+      "pay-amount-hint",
+      "Prefilled with what you owe for " + levy.purpose + ". The fine, if any, is paid first. " +
+        "Anything extra goes to your monthly contributions."
+    );
+    return;
+  }
+
+  const summary = dashboardData.debt_summary;
+  const owed = Math.ceil(Number(summary.monthly_owed || 0));
+  const monthly = Math.ceil(Number(dashboardData.current_monthly_amount || 0));
   amountInput.value = owed > 0 ? owed : (monthly || "");
   setText(
     "pay-amount-hint",
     owed > 0
-      ? "Prefilled with your total debt of " + money(summary.total_owed) + ". You may pay less or more; extra becomes credit."
-      : "You owe nothing now. Any amount becomes credit for coming months."
+      ? "Prefilled with your monthly debt of " + money(summary.monthly_owed) + ". You may pay less or more; extra becomes credit."
+      : "You owe nothing on monthly contributions. Any amount becomes credit for coming months."
   );
+}
 
-  document.getElementById("pay-phone").value = localPhone(dashboardData && dashboardData.phone_number);
+function openPaymentPanel(target) {
+  if (!dashboardData) return;
+
+  fillPaymentTargets(typeof target === "string" ? target : "");
+  updateAmountForTarget();
+
+  document.getElementById("pay-phone").value = localPhone(dashboardData.phone_number);
   clearPaymentErrors();
 
   const status = document.getElementById("pay-status");
@@ -302,7 +393,7 @@ function openPaymentPanel() {
   }
 
   document.getElementById("pay-overlay").hidden = false;
-  amountInput.focus();
+  document.getElementById("pay-amount").focus();
 }
 
 function closePaymentPanel() {
@@ -329,6 +420,7 @@ function setSending(isSending) {
   const button = document.getElementById("pay-send");
   button.disabled = isSending;
   button.textContent = isSending ? "Waiting for M-Pesa..." : "Send";
+  document.getElementById("pay-target").disabled = isSending;
 }
 
 async function sendPayment(event) {
@@ -338,6 +430,7 @@ async function sendPayment(event) {
   const amountInput = document.getElementById("pay-amount");
   const phoneInput = document.getElementById("pay-phone");
   const amount = Number(amountInput.value);
+  const levy = selectedLevy();
 
   if (!Number.isInteger(amount) || amount < 1) {
     setText("error-amount", "Enter a whole number of shillings, at least 1.");
@@ -355,16 +448,17 @@ async function sendPayment(event) {
     return;
   }
 
+  const body = { amount: amount, phone_number: phoneInput.value.trim() };
+  if (levy) body.levy_obligation_id = levy.id;
+
   setSending(true);
   setPayStatus("Sending the request to M-Pesa...", "waiting");
 
   try {
-    const result = await apiRequest("/payments/mpesa/stk-push/", "POST", {
-      amount: amount,
-      phone_number: phoneInput.value.trim(),
-    });
+    const result = await apiRequest("/payments/mpesa/stk-push/", "POST", body);
     setPayStatus(
-      "Check your phone and enter your M-Pesa PIN to pay " + money(amount) + ".",
+      "Check your phone and enter your M-Pesa PIN to pay " + money(amount) +
+        (levy ? " toward " + levy.purpose : "") + ".",
       "waiting"
     );
     pollPayment(result.transaction.id, Date.now());
@@ -418,7 +512,7 @@ async function pollPayment(transactionId, startedAt) {
   if (tx.status === "success") {
     const receipt = tx.mpesa_receipt ? " Receipt " + tx.mpesa_receipt + "." : "";
     setPayStatus(tx.message + receipt, "success");
-    showNotice("Payment of " + money(tx.amount) + " received." + receipt);
+    showNotice("Payment of " + money(tx.amount) + " for " + tx.paying_for + " received." + receipt);
     await loadDashboard();
   } else {
     setPayStatus(tx.message, "error");
@@ -430,9 +524,10 @@ async function pollPayment(transactionId, startedAt) {
 
 if (guardPage()) {
   document.getElementById("logout-btn").addEventListener("click", logout);
-  document.getElementById("pay-btn").addEventListener("click", openPaymentPanel);
+  document.getElementById("pay-btn").addEventListener("click", function () { openPaymentPanel(""); });
   document.getElementById("pay-close").addEventListener("click", closePaymentPanel);
   document.getElementById("pay-form").addEventListener("submit", sendPayment);
+  document.getElementById("pay-target").addEventListener("change", updateAmountForTarget);
 
   // Close the panel by clicking the dark background or pressing Escape.
   document.getElementById("pay-overlay").addEventListener("click", function (event) {

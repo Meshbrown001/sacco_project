@@ -46,12 +46,12 @@
       </div>
     </section>
 
-    <!-- What you owe -->
+    <!-- What you owe (monthly) -->
     <section class="panel">
       <div class="panel-head">
         <div>
           <h2>What You Owe</h2>
-          <p class="muted">Payments clear the oldest month first, the penalty before the contribution.</p>
+          <p class="muted">Monthly contributions. Payments clear the oldest month first, the penalty before the contribution.</p>
         </div>
         <button id="pay-btn" class="btn btn-pay" type="button">Make Payment</button>
       </div>
@@ -69,7 +69,35 @@
           <tfoot></tfoot>
         </table>
       </div>
-      <p id="no-debt" class="empty-note" hidden>Nothing owed. You are fully up to date.</p>
+      <p id="no-debt" class="empty-note" hidden>Nothing owed on monthly contributions. You are up to date.</p>
+    </section>
+
+    <!-- Special contributions -->
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Special Contributions</h2>
+          <p class="muted">One-off contributions set by the chairperson. A payment toward one clears its fine first, then the amount.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="levies-table">
+          <thead>
+            <tr>
+              <th>Reason</th>
+              <th>Deadline</th>
+              <th class="num">Amount</th>
+              <th class="num">Paid</th>
+              <th>Fine</th>
+              <th class="num">Still Owed</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="no-levies" class="empty-note" hidden>No special contributions at the moment.</p>
     </section>
 
     <!-- Contributions -->
@@ -157,6 +185,9 @@
       </div>
 
       <form id="pay-form" novalidate>
+        <label for="pay-target">Paying for</label>
+        <select id="pay-target"></select>
+
         <label for="pay-amount">Amount (KES)</label>
         <input id="pay-amount" type="number" inputmode="numeric" min="1" max="250000" step="1" required>
         <small class="hint" id="pay-amount-hint"></small>

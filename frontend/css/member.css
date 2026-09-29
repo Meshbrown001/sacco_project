@@ -315,3 +315,43 @@ tfoot .owed { color: var(--orange); }
   .panel-head .btn-pay { width: 100%; }
   .card .big-number { font-size: 21px; }
 }
+
+
+
+
+
+/* ----- Special contributions and the payment choice ------------------ */
+
+.btn-small {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.modal select {
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--black);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.modal select:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.15);
+}
+
+.levy-reason { font-weight: 600; }
+
+.tag-closed {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--grey-light);
+  color: var(--grey);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}
