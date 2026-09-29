@@ -7,6 +7,9 @@ Payment flow:
 A payment credits the wallet exactly once, whichever of 2 or 3 confirms it first.
 If 3 wins, the wallet entry gets a placeholder reference (CHK-...), and a late
 callback from 2 replaces it with the real M-Pesa receipt.
+
+Each payment pays what the member chose when starting it: a special
+contribution, or the monthly contributions.
 """
 
 import hmac
@@ -90,7 +93,11 @@ def placeholder_reference(checkout_request_id):
 # 1. Starting a payment
 # ---------------------------------------------------------------------------
 
-def initiate_payment(member, amount, phone_number):
+def initiate_payment(member, amount, phone_number, levy_obligation=None):
+    """
+    Records the request, then sends the PIN prompt. levy_obligation is the
+    special contribution the member chose; None means monthly contributions.
+    """
     payment_settings = PaymentSettings.objects.first()
     if payment_settings is None:
         raise PaymentError("M-Pesa payments are not set up yet. Contact the SACCO office.", status=503)
@@ -109,12 +116,16 @@ def initiate_payment(member, amount, phone_number):
     url = callback_url()
     tx = MpesaTransaction.objects.create(
         member=member,
+        levy_obligation=levy_obligation,
         phone_number=phone_number,
         amount=Decimal(amount),
     )
 
+    # Shown on the member's phone; Safaricom allows 13 characters.
+    description = "Special contr" if levy_obligation else "Contribution"
+
     try:
-        data = stk_push(payment_settings, phone_number, amount, url)
+        data = stk_push(payment_settings, phone_number, amount, url, description=description)
     except DarajaError as exc:
         tx.status = Status.FAILED
         tx.result_desc = str(exc)[:255]
@@ -125,7 +136,10 @@ def initiate_payment(member, amount, phone_number):
     tx.merchant_request_id = data.get("MerchantRequestID", "")
     tx.checkout_request_id = data.get("CheckoutRequestID")
     tx.save(update_fields=["merchant_request_id", "checkout_request_id", "updated_at"])
-    logger.info("STK push sent: tx %s, member %s, KES %s", tx.pk, member.username, amount)
+    logger.info(
+        "STK push sent: tx %s, member %s, KES %s, for %s",
+        tx.pk, member.username, amount, tx.paying_for,
+    )
     return tx, data.get("CustomerMessage", "")
 
 
@@ -134,7 +148,10 @@ def initiate_payment(member, amount, phone_number):
 # ---------------------------------------------------------------------------
 
 def _credit_once(tx, amount, receipt, completed_at):
-    """Credits the wallet unless this transaction already did. Caller holds a lock on tx."""
+    """
+    Credits the wallet unless this transaction already did, then pays what
+    the member chose. Caller holds a lock on tx.
+    """
     if tx.credited:
         return
     reference = receipt or placeholder_reference(tx.checkout_request_id)
@@ -144,6 +161,7 @@ def _credit_once(tx, amount, receipt, completed_at):
         reference=reference,
         effective_at=completed_at or timezone.now(),
         description=f"M-Pesa payment from +{tx.phone_number}",
+        levy_obligation=tx.levy_obligation,
     )
     tx.credited = True
 

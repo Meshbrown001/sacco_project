@@ -1,5 +1,5 @@
 """
-Tests for the late-receipt fix. They run in a temporary test database,
+Tests for the payments app. They run in a temporary test database,
 never touch real records, and never contact Safaricom: the status query
 is replaced by a stand-in that answers "success".
 """
@@ -12,7 +12,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from accounts.models import CustomUser
-from contributions.models import WalletEntry
+from contributions.models import LevyObligation, SpecialLevy, WalletEntry
+from contributions.services import create_levy_obligations
 from core.models import ContributionSettings, PaymentSettings
 from payments.models import MpesaTransaction
 from payments.services import handle_callback, refresh_status
@@ -97,3 +98,36 @@ class LateReceiptTests(TestCase):
         handle_callback(success_callback())
         handle_callback(success_callback())
         self.assertEqual(self.credits().count(), 1)
+
+
+class TargetedPaymentTests(TestCase):
+    """A payment for a special contribution reaches that contribution."""
+
+    def setUp(self):
+        ContributionSettings.objects.create(monthly_amount=Decimal("1000"))
+        self.member = CustomUser.objects.create_user(
+            username="levy_member",
+            password="Test#Pass2026",
+            role=CustomUser.Role.MEMBER,
+            phone_number="254700000031",
+            national_id="31313131",
+        )
+        levy = SpecialLevy.objects.create(
+            purpose="Annual trip",
+            amount=Decimal("2000"),
+            deadline=timezone.localdate() + timedelta(days=30),
+        )
+        create_levy_obligations(levy)
+        self.obligation = LevyObligation.objects.get(levy=levy, member=self.member)
+        MpesaTransaction.objects.create(
+            member=self.member,
+            levy_obligation=self.obligation,
+            phone_number="254700000031",
+            amount=Decimal("1"),
+            checkout_request_id=CHECKOUT_ID,
+        )
+
+    def test_callback_pays_the_chosen_special_contribution(self):
+        handle_callback(success_callback())
+        self.obligation.refresh_from_db()
+        self.assertEqual(self.obligation.amount_paid, Decimal("1.00"))

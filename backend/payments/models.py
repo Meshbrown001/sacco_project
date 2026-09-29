@@ -10,6 +10,9 @@ class MpesaTransaction(models.Model):
     even if Safaricom never answers. Money reaches the member's wallet
     only when Safaricom confirms success, and only once: `credited`
     guards against a callback and a status query both paying.
+
+    levy_obligation records what the member chose to pay for: a special
+    contribution, or, when empty, the monthly contributions.
     """
     class Status(models.TextChoices):
         PENDING = "pending", "Waiting for PIN"
@@ -22,6 +25,13 @@ class MpesaTransaction(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="mpesa_transactions",
+    )
+    levy_obligation = models.ForeignKey(
+        "contributions.LevyObligation",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="mpesa_transactions",
+        help_text="The special contribution this pays. Empty means monthly contributions.",
     )
     phone_number = models.CharField(max_length=12, help_text="Paying phone, 2547XXXXXXXX")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -48,6 +58,12 @@ class MpesaTransaction(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    @property
+    def paying_for(self):
+        if self.levy_obligation_id and self.levy_obligation:
+            return self.levy_obligation.levy.purpose
+        return "Monthly contributions"
 
     def __str__(self):
         return f"{self.member.username} KES {self.amount} {self.status}"

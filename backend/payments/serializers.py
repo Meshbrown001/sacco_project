@@ -6,7 +6,10 @@ from .services import status_message
 
 
 class InitiatePaymentSerializer(serializers.Serializer):
-    """Checks the amount and phone number a member submits."""
+    """
+    Checks what a member submits. levy_obligation_id chooses a special
+    contribution; leaving it out pays the monthly contributions.
+    """
     amount = serializers.IntegerField(
         min_value=1,
         max_value=250000,
@@ -17,6 +20,7 @@ class InitiatePaymentSerializer(serializers.Serializer):
         },
     )
     phone_number = serializers.CharField()
+    levy_obligation_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate_phone_number(self, value):
         return normalize_kenyan_phone(value)
@@ -26,12 +30,13 @@ class TransactionSerializer(serializers.ModelSerializer):
     """What the dashboard sees about a payment."""
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     message = serializers.SerializerMethodField()
+    paying_for = serializers.CharField(read_only=True)
 
     class Meta:
         model = MpesaTransaction
         fields = [
             "id", "amount", "phone_number", "status", "status_label",
-            "message", "mpesa_receipt", "transaction_date", "created_at",
+            "message", "paying_for", "mpesa_receipt", "transaction_date", "created_at",
         ]
 
     def get_message(self, obj):

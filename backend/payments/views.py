@@ -5,6 +5,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from contributions.models import LevyObligation, SpecialLevy
 from .models import MpesaTransaction
 from .serializers import InitiatePaymentSerializer, TransactionSerializer
 from .services import (
@@ -22,7 +23,8 @@ class InitiatePaymentView(APIView):
     """
     Sends an M-Pesa PIN prompt for the logged-in member.
     POST /api/payments/mpesa/stk-push/
-    Body: {"amount": 1000, "phone_number": "0712345678"}
+    Body: {"amount": 1000, "phone_number": "0712345678", "levy_obligation_id": 5}
+    Leave out levy_obligation_id to pay the monthly contributions.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -33,12 +35,34 @@ class InitiatePaymentView(APIView):
 
         serializer = InitiatePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # A chosen special contribution must belong to this member and still be owed.
+        obligation = None
+        obligation_id = data.get("levy_obligation_id")
+        if obligation_id:
+            obligation = (
+                LevyObligation.objects.select_related("levy")
+                .filter(pk=obligation_id, member=member)
+                .first()
+            )
+            if obligation is None or obligation.levy.status == SpecialLevy.Status.CANCELLED:
+                return Response(
+                    {"detail": "That special contribution was not found on your account."},
+                    status=404,
+                )
+            if obligation.total_owed <= 0:
+                return Response(
+                    {"detail": "You have already paid this special contribution in full."},
+                    status=400,
+                )
 
         try:
             tx, customer_message = initiate_payment(
                 member,
-                serializer.validated_data["amount"],
-                serializer.validated_data["phone_number"],
+                data["amount"],
+                data["phone_number"],
+                levy_obligation=obligation,
             )
         except PaymentError as exc:
             return Response({"detail": str(exc)}, status=exc.status)
