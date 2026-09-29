@@ -1,17 +1,24 @@
 """
-Contribution, penalty and wallet rules for the SACCO.
+Contribution, penalty, special contribution and wallet rules.
 
-The rules:
+Monthly contributions:
   1. Each month freezes its contribution amount (amount_due) when it falls due.
   2. A month not fully paid by 00:00 on the 1st of the next month (Nairobi
      time) gets one penalty: rate% of that month's full amount_due.
   3. Before fining, the wallet pays whatever it can.
   4. Payments clear the oldest month first, penalty before contribution.
   5. Partial payments are allowed; the rest stays owing.
-  6. Money left after all debts stays in the wallet as credit toward
-     coming months.
+  6. Money left after all debts stays in the wallet as credit.
   7. A payment Safaricom completed before a month's deadline cancels that
      month's penalty if the payment covered the month.
+
+Special contributions (levies):
+  8. Every active member owes it, plus members who join before the deadline.
+  9. Anyone not fully paid by 00:00 after the deadline day is fined once,
+     by a percentage of the amount or a fixed sum.
+ 10. A payment aimed at a levy pays its fine first, then the amount.
+ 11. A payment completed before the deadline that covers the levy cancels
+     its fine.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -22,14 +29,21 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import ContributionSettings
-from .models import MemberWallet, MonthlyContribution, Penalty, WalletEntry
+from .models import (
+    LevyObligation,
+    MemberWallet,
+    MonthlyContribution,
+    Penalty,
+    SpecialLevy,
+    WalletEntry,
+)
 
 User = get_user_model()
 
 CENTS = Decimal("0.01")
 ZERO = Decimal("0")
 
-# A payment prompt started this close to midnight may still be waiting on
+# A payment prompt started this close to a deadline may still be waiting on
 # Safaricom when the sweep runs. The sweep holds off fining that member.
 PENDING_GRACE = timedelta(minutes=15)
 
@@ -71,6 +85,11 @@ def month_deadline(month):
     return timezone.make_aware(datetime.combine(next_month(month), time.min))
 
 
+def levy_deadline(levy):
+    """00:00 after the levy's last day, in the SACCO's time zone."""
+    return timezone.make_aware(datetime.combine(levy.deadline + timedelta(days=1), time.min))
+
+
 def current_month_for(today=None):
     return first_of_month(today or timezone.localdate())
 
@@ -97,6 +116,16 @@ def compute_status(row, current_month):
     return MonthlyContribution.Status.UNPAID
 
 
+def compute_levy_status(obligation, today):
+    if obligation.is_fully_paid:
+        return LevyObligation.Status.PAID
+    if today > obligation.levy.deadline:
+        return LevyObligation.Status.OVERDUE
+    if obligation.amount_paid > 0:
+        return LevyObligation.Status.PARTIAL
+    return LevyObligation.Status.UNPAID
+
+
 def get_wallet_for_update(member):
     """Returns the member's wallet, locked until the transaction ends."""
     wallet, _ = MemberWallet.objects.get_or_create(member=member)
@@ -104,7 +133,8 @@ def get_wallet_for_update(member):
 
 
 def _record_entry(wallet, entry_type, source, amount, description="",
-                  contribution=None, penalty=None, reference="", effective_at=None):
+                  contribution=None, penalty=None, levy_obligation=None,
+                  reference="", effective_at=None):
     return WalletEntry.objects.create(
         wallet=wallet,
         entry_type=entry_type,
@@ -114,6 +144,7 @@ def _record_entry(wallet, entry_type, source, amount, description="",
         description=description,
         contribution=contribution,
         penalty=penalty,
+        levy_obligation=levy_obligation,
         reference=reference,
         effective_at=effective_at or timezone.now(),
     )
@@ -122,8 +153,7 @@ def _record_entry(wallet, entry_type, source, amount, description="",
 def has_pending_payment_before(member, deadline):
     """
     True if the member started an M-Pesa payment shortly before the
-    deadline and Safaricom has not answered yet. Returns False until the
-    payments app defines MpesaTransaction in Step 5.
+    deadline and Safaricom has not answered yet.
     """
     try:
         from payments.models import MpesaTransaction
@@ -137,8 +167,12 @@ def has_pending_payment_before(member, deadline):
     ).exists()
 
 
+def is_billable_member(member):
+    return member.is_active and member.role == User.Role.MEMBER
+
+
 # ---------------------------------------------------------------------------
-# Months
+# Monthly contributions
 # ---------------------------------------------------------------------------
 
 def ensure_months(member, today=None):
@@ -190,15 +224,12 @@ def ensure_months(member, today=None):
     return newly_overdue
 
 
-# ---------------------------------------------------------------------------
-# Paying debts from the wallet
-# ---------------------------------------------------------------------------
-
 def apply_wallet(member, today=None):
     """
-    Pays debts from the wallet: oldest month first, penalties before the
-    contribution. Stops when the wallet runs dry. Money left over stays
-    in the wallet. Returns a list describing each payment made.
+    Pays monthly debts from the wallet: oldest month first, penalties
+    before the contribution. Stops when the wallet runs dry. Money left
+    over stays in the wallet. Special contributions are never paid here;
+    the member chooses to pay those.
     """
     allocations = []
     current = current_month_for(today)
@@ -215,7 +246,6 @@ def apply_wallet(member, today=None):
         )
 
         for row in rows:
-            # Penalties for this month first.
             penalties = (
                 Penalty.objects.select_for_update()
                 .filter(contribution=row, waived=False, paid=False)
@@ -246,7 +276,6 @@ def apply_wallet(member, today=None):
             if wallet.balance <= 0:
                 break
 
-            # Then the contribution itself.
             pay = min(row.balance, wallet.balance)
             if pay > 0:
                 row.amount_paid += pay
@@ -275,10 +304,9 @@ def apply_wallet(member, today=None):
 
 def waive_on_time_penalties(member, available, effective_at):
     """
-    The midnight rule. If Safaricom completed a payment before a month's
-    deadline, and the money covers everything up to and including that
-    month, the penalty charged for that month is cancelled.
-    Only untouched penalties qualify.
+    The midnight rule for monthly contributions. If Safaricom completed a
+    payment before a month's deadline, and the money covers everything up
+    to and including that month, the penalty for that month is cancelled.
     """
     waived = []
     candidates = (
@@ -318,15 +346,183 @@ def waive_on_time_penalties(member, available, effective_at):
 
 
 # ---------------------------------------------------------------------------
+# Special contributions (levies)
+# ---------------------------------------------------------------------------
+
+def create_levy_obligations(levy, today=None):
+    """
+    Gives every active member who joined by the deadline an obligation for
+    this levy. Safe to run again: existing obligations are left alone.
+    Returns how many were created.
+    """
+    if levy.status != SpecialLevy.Status.ACTIVE:
+        return 0
+    today = today or timezone.localdate()
+
+    members = User.objects.filter(
+        role=User.Role.MEMBER,
+        is_active=True,
+        date_joined_sacco__lte=levy.deadline,
+    )
+    existing = set(levy.obligations.values_list("member_id", flat=True))
+    new = []
+    for member in members:
+        if member.id in existing:
+            continue
+        obligation = LevyObligation(levy=levy, member=member, amount_due=levy.amount)
+        obligation.status = compute_levy_status(obligation, today)
+        new.append(obligation)
+    LevyObligation.objects.bulk_create(new, ignore_conflicts=True)
+    return len(new)
+
+
+def ensure_levy_obligations(member, today=None):
+    """
+    Gives one member an obligation for every active levy whose deadline
+    falls on or after the day they joined. Returns how many were created.
+    """
+    if not is_billable_member(member):
+        return 0
+    today = today or timezone.localdate()
+
+    levies = SpecialLevy.objects.filter(
+        status=SpecialLevy.Status.ACTIVE,
+        deadline__gte=member.date_joined_sacco,
+    ).exclude(obligations__member=member)
+
+    new = []
+    for levy in levies:
+        obligation = LevyObligation(levy=levy, member=member, amount_due=levy.amount)
+        obligation.status = compute_levy_status(obligation, today)
+        new.append(obligation)
+    LevyObligation.objects.bulk_create(new, ignore_conflicts=True)
+    return len(new)
+
+
+def charge_levy_fines(member, today=None):
+    """
+    Fines each of the member's levy obligations that passed its deadline
+    unpaid, once. Also refreshes every obligation's status.
+    Returns (fines_charged, skipped_for_pending_payment).
+    """
+    today = today or timezone.localdate()
+    charged = 0
+    skipped = 0
+
+    with transaction.atomic():
+        obligations = (
+            LevyObligation.objects.select_for_update()
+            .filter(member=member)
+            .select_related("levy")
+        )
+        for ob in obligations:
+            levy = ob.levy
+            changed = []
+
+            if (
+                levy.status == SpecialLevy.Status.ACTIVE
+                and today > levy.deadline
+                and ob.fine_charged_at is None
+                and not ob.is_fully_paid
+            ):
+                if has_pending_payment_before(member, levy_deadline(levy)):
+                    skipped += 1
+                else:
+                    ob.fine_amount = levy.fine_for(ob.amount_due)
+                    ob.fine_charged_at = timezone.now()
+                    changed += ["fine_amount", "fine_charged_at"]
+                    charged += 1
+
+            status = compute_levy_status(ob, today)
+            if status != ob.status:
+                ob.status = status
+                changed.append("status")
+            if changed:
+                ob.save(update_fields=changed)
+
+    return charged, skipped
+
+
+def apply_levy_payment(member, obligation, effective_at, today=None):
+    """
+    Pays one levy obligation from the wallet: the fine first, then the
+    amount. A payment completed before the deadline that covers the levy
+    cancels its fine. Returns a list describing each payment made.
+    """
+    today = today or timezone.localdate()
+    allocations = []
+
+    with transaction.atomic():
+        wallet = get_wallet_for_update(member)
+        ob = (
+            LevyObligation.objects.select_for_update()
+            .select_related("levy")
+            .get(pk=obligation.pk, member=member)
+        )
+        levy = ob.levy
+
+        # The deadline rule: paid in time, so the fine should never have applied.
+        if (
+            ob.fine_amount > 0
+            and ob.fine_amount_paid == 0
+            and not ob.fine_waived
+            and effective_at < levy_deadline(levy)
+            and wallet.balance >= ob.balance
+        ):
+            ob.fine_waived = True
+            ob.fine_waived_reason = (
+                f"Payment completed {timezone.localtime(effective_at):%d %b %Y %H:%M}, "
+                f"before the {levy.deadline:%d %b %Y} deadline."
+            )
+            ob.save(update_fields=["fine_waived", "fine_waived_reason"])
+
+        # The fine first.
+        pay = min(ob.fine_balance, wallet.balance)
+        if pay > 0:
+            ob.fine_amount_paid += pay
+            wallet.balance -= pay
+            _record_entry(
+                wallet, WalletEntry.EntryType.DEBIT, WalletEntry.Source.LEVY_FINE, pay,
+                description=f"Fine: {levy.purpose}",
+                levy_obligation=ob,
+            )
+            allocations.append({"type": "levy fine", "levy": levy.purpose, "amount": pay})
+
+        # Then the amount.
+        pay = min(ob.balance, wallet.balance)
+        if pay > 0:
+            ob.amount_paid += pay
+            if ob.is_fully_paid:
+                ob.date_paid = timezone.now()
+            wallet.balance -= pay
+            _record_entry(
+                wallet, WalletEntry.EntryType.DEBIT, WalletEntry.Source.LEVY, pay,
+                description=levy.purpose,
+                levy_obligation=ob,
+            )
+            allocations.append({"type": "levy", "levy": levy.purpose, "amount": pay})
+
+        ob.status = compute_levy_status(ob, today)
+        ob.save(update_fields=["fine_amount_paid", "amount_paid", "date_paid", "status"])
+        wallet.save(update_fields=["balance", "updated_at"])
+
+    return allocations
+
+
+# ---------------------------------------------------------------------------
 # Recording a payment
 # ---------------------------------------------------------------------------
 
 def record_payment(member, amount, reference="", effective_at=None,
-                   source=WalletEntry.Source.MPESA, description="", today=None):
+                   source=WalletEntry.Source.MPESA, description="", today=None,
+                   levy_obligation=None):
     """
-    Credits the wallet, applies the midnight rule, then pays debts.
-    The M-Pesa callback calls this in Step 5. A reference already on
-    record is ignored, so a repeated callback never pays twice.
+    Credits the wallet, then pays what the member chose:
+      levy_obligation given -> that special contribution first, anything
+                               left over then pays monthly debts
+      no levy_obligation    -> monthly debts, oldest first
+    A reference already on record is ignored, so a repeated M-Pesa
+    callback never pays twice.
     """
     amount = money(amount)
     if amount <= 0:
@@ -340,6 +536,7 @@ def record_payment(member, amount, reference="", effective_at=None,
             return {"duplicate": True, "reference": reference}
 
         ensure_months(member, today)
+        ensure_levy_obligations(member, today)
 
         wallet = get_wallet_for_update(member)
         wallet.balance += amount
@@ -350,8 +547,15 @@ def record_payment(member, amount, reference="", effective_at=None,
             reference=reference, effective_at=effective_at,
         )
 
-        waived = waive_on_time_penalties(member, wallet.balance, effective_at)
-        allocations = apply_wallet(member, today)
+        waived = []
+        allocations = []
+        if levy_obligation is not None:
+            allocations += apply_levy_payment(member, levy_obligation, effective_at, today)
+            allocations += apply_wallet(member, today)
+        else:
+            wallet.refresh_from_db()
+            waived = waive_on_time_penalties(member, wallet.balance, effective_at)
+            allocations += apply_wallet(member, today)
         wallet.refresh_from_db()
 
     return {
@@ -364,13 +568,14 @@ def record_payment(member, amount, reference="", effective_at=None,
 
 
 # ---------------------------------------------------------------------------
-# The penalty sweep
+# The sweep
 # ---------------------------------------------------------------------------
 
 def sweep_member(member, settings_row, today=None):
     """
-    Brings one member up to date: creates missing months, pays what the
-    wallet can cover, then fines each finished month still unpaid.
+    Brings one member up to date: creates missing months and levy
+    obligations, pays what the wallet can cover, then fines each finished
+    month and each passed levy still unpaid.
     """
     current = current_month_for(today)
     last_completed = previous_month(current)
@@ -380,6 +585,7 @@ def sweep_member(member, settings_row, today=None):
 
     with transaction.atomic():
         newly_overdue = ensure_months(member, today)
+        ensure_levy_obligations(member, today)
         apply_wallet(member, today)
 
         rows = (
@@ -403,13 +609,20 @@ def sweep_member(member, settings_row, today=None):
             row.save(update_fields=["penalty_charged"])
             charged += 1
 
-    return {"newly_overdue": newly_overdue, "charged": charged, "skipped": skipped}
+        levy_fines, levy_skipped = charge_levy_fines(member, today)
+
+    return {
+        "newly_overdue": newly_overdue,
+        "charged": charged,
+        "skipped": skipped + levy_skipped,
+        "levy_fines": levy_fines,
+    }
 
 
 def run_penalty_sweep(today=None, username=None):
     """
     Sweeps every active member, or one member when username is given.
-    Safe to run as often as needed: each month is fined only once.
+    Safe to run as often as needed: each month and levy is fined only once.
     """
     settings_row = get_contribution_settings()
     if settings_row is None:
@@ -419,7 +632,7 @@ def run_penalty_sweep(today=None, username=None):
     if username:
         members = members.filter(username=username)
 
-    totals = {"newly_overdue": 0, "charged": 0, "skipped": 0}
+    totals = {"newly_overdue": 0, "charged": 0, "skipped": 0, "levy_fines": 0}
     for member in members:
         result = sweep_member(member, settings_row, today)
         for key in totals:
@@ -430,6 +643,7 @@ def run_penalty_sweep(today=None, username=None):
         "members_checked": members.count(),
         "months_marked_overdue": totals["newly_overdue"],
         "penalties_charged": totals["charged"],
+        "special_contribution_fines": totals["levy_fines"],
         "skipped_pending_payment": totals["skipped"],
         "penalty_rate": f"{settings_row.penalty_rate}%",
         "penalty_value_each": str(calculate_penalty(settings_row.monthly_amount, settings_row.penalty_rate)),

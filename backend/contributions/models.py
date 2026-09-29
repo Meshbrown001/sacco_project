@@ -7,9 +7,8 @@ from django.db import models
 class MemberWallet(models.Model):
     """
     One balance per member. M-Pesa payments credit it, and the system
-    pays debts from it: penalties, contributions, and later special
-    levies. Money left after all debts clear stays here as credit
-    toward coming months.
+    pays debts from it: penalties, contributions and special contributions.
+    Money left after all debts clear stays here as credit.
     """
     member = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -128,15 +127,151 @@ class Penalty(models.Model):
         return f"{self.member.username} penalty {self.amount} ({state})"
 
 
+class SpecialLevy(models.Model):
+    """
+    A one-off contribution the chairperson raises for a specific reason,
+    such as a trip. Every active member owes it, including members who
+    join before the deadline. Anyone not fully paid by the end of the
+    deadline day is fined once, by a percentage or a fixed amount.
+
+    Status:
+      active    - open for payment
+      closed    - finished; kept on record
+      cancelled - withdrawn before anyone paid; kept on record
+    """
+    class FineType(models.TextChoices):
+        PERCENT = "percent", "Percentage of the amount"
+        FIXED = "fixed", "Fixed amount (KES)"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CLOSED = "closed", "Closed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    purpose = models.CharField(max_length=255, help_text="The reason, e.g. Annual trip to Mombasa")
+    description = models.TextField(blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    deadline = models.DateField(help_text="Last day to pay without a fine.")
+    fine_type = models.CharField(
+        max_length=10,
+        choices=FineType.choices,
+        default=FineType.PERCENT,
+    )
+    fine_value = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="A percentage such as 15.00, or shillings such as 200.00",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    fines_charged = models.BooleanField(
+        default=False,
+        help_text="Set once the fines have been charged after the deadline.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="levies_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def fine_for(self, amount_due):
+        """The fine a member pays for missing the deadline on amount_due."""
+        if self.fine_type == self.FineType.FIXED:
+            return self.fine_value
+        return (Decimal(amount_due) * self.fine_value / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def fine_label(self):
+        if self.fine_type == self.FineType.FIXED:
+            return f"KES {self.fine_value:,.2f}"
+        return f"{self.fine_value.normalize()}% of the amount"
+
+    def __str__(self):
+        return f"{self.purpose} - {self.amount} (due {self.deadline})"
+
+
+class LevyObligation(models.Model):
+    """
+    What one member owes toward one special contribution. The amount is
+    frozen when the obligation is created, so later corrections to the
+    contribution do not silently change debts already partly paid.
+    """
+    class Status(models.TextChoices):
+        UNPAID = "unpaid", "Unpaid"
+        PARTIAL = "partial", "Partially paid"
+        PAID = "paid", "Paid"
+        OVERDUE = "overdue", "Overdue"
+
+    levy = models.ForeignKey(
+        SpecialLevy,
+        on_delete=models.CASCADE,
+        related_name="obligations",
+    )
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="levy_obligations",
+    )
+    amount_due = models.DecimalField(max_digits=10, decimal_places=2)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    date_paid = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.UNPAID,
+    )
+    fine_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    fine_amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    fine_charged_at = models.DateTimeField(null=True, blank=True)
+    fine_waived = models.BooleanField(default=False)
+    fine_waived_reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("levy", "member")
+        ordering = ["levy__deadline", "member__username"]
+
+    @property
+    def balance(self):
+        return max(self.amount_due - self.amount_paid, Decimal("0"))
+
+    @property
+    def fine_balance(self):
+        if self.fine_waived:
+            return Decimal("0")
+        return max(self.fine_amount - self.fine_amount_paid, Decimal("0"))
+
+    @property
+    def total_owed(self):
+        return self.balance + self.fine_balance
+
+    @property
+    def is_fully_paid(self):
+        return self.amount_due > 0 and self.amount_paid >= self.amount_due
+
+    def __str__(self):
+        return f"{self.member.username} - {self.levy.purpose} - {self.status}"
+
+
 class WalletEntry(models.Model):
     """
     A permanent record of every movement in or out of a wallet.
-    Credits come from M-Pesa. Debits pay a penalty, a contribution or
-    a levy. The wallet balance must always equal the sum of its entries.
+    Credits come from M-Pesa. Debits pay a penalty, a contribution, a
+    special contribution or its fine. The wallet balance must always
+    equal the sum of its entries.
 
     effective_at is when the money actually moved. For M-Pesa it is the
     completion time Safaricom reports, which decides whether a payment
-    beat the midnight deadline.
+    beat a deadline.
     """
     class EntryType(models.TextChoices):
         CREDIT = "credit", "Credit"
@@ -146,7 +281,8 @@ class WalletEntry(models.Model):
         MPESA = "mpesa", "M-Pesa payment"
         PENALTY = "penalty", "Penalty payment"
         CONTRIBUTION = "contribution", "Contribution payment"
-        LEVY = "levy", "Special levy"
+        LEVY = "levy", "Special contribution"
+        LEVY_FINE = "levy_fine", "Special contribution fine"
         ADJUSTMENT = "adjustment", "Manual adjustment"
 
     wallet = models.ForeignKey(
@@ -171,6 +307,12 @@ class WalletEntry(models.Model):
         null=True, blank=True,
         related_name="wallet_entries",
     )
+    levy_obligation = models.ForeignKey(
+        LevyObligation,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="wallet_entries",
+    )
     reference = models.CharField(
         max_length=50, blank=True,
         help_text="M-Pesa receipt number for credits from M-Pesa.",
@@ -184,23 +326,3 @@ class WalletEntry(models.Model):
 
     def __str__(self):
         return f"{self.wallet.member.username} {self.entry_type} {self.amount} ({self.source})"
-
-
-class SpecialLevy(models.Model):
-    """
-    A one-off contribution the chairperson raises for a specific issue.
-    Holds the purpose, the amount each member owes, the deadline, and
-    when it was created. When the deadline passes, the system draws
-    from member wallets.
-    """
-    purpose = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    deadline = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"{self.purpose} - {self.amount} (due {self.deadline})"

@@ -1,0 +1,225 @@
+/* ------------------------------------------------------------------
+   reset.css - forgot password and new password screens
+   Light blue and light orange. Loaded after auth.css.
+   Red only for errors.
+   ------------------------------------------------------------------ */
+
+/* Anything marked hidden stays hidden, whatever other rules say.
+   Without this, auth.css's "form { display: flex }" shows hidden forms. */
+[hidden] { display: none !important; }
+
+body.reset-page {
+  --r-blue-soft: #e3f2fd;
+  --r-blue-light: #90caf9;
+  --r-blue: #64b5f6;
+  --r-blue-ink: #0d3c61;
+  --r-orange-soft: #fff3e0;
+  --r-orange-light: #ffcc80;
+  --r-orange: #ffb74d;
+  --r-orange-ink: #8a4b00;
+
+  background: linear-gradient(160deg, var(--r-blue-soft) 0%, var(--r-orange-soft) 100%);
+}
+
+.reset-page .auth-container {
+  border-top: 4px solid var(--r-orange);
+}
+
+.reset-page .auth-container h2 { color: var(--r-blue-ink); }
+
+.reset-page label { color: var(--r-blue-ink); }
+
+.reset-page input:focus {
+  border-color: var(--r-blue);
+  box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.25);
+}
+
+.reset-page .auth-container a { color: var(--r-blue-ink); }
+
+/* ----- Buttons ----------------------------------------------------- */
+
+.reset-page button {
+  background: var(--r-blue);
+  color: var(--r-blue-ink);
+}
+
+.reset-page button:hover { background: var(--r-blue-light); }
+
+.reset-page button.button-orange {
+  background: var(--r-orange);
+  color: var(--r-orange-ink);
+}
+
+.reset-page button.button-orange:hover { background: var(--r-orange-light); }
+
+.reset-page button:disabled {
+  background: #cfd8dc;
+  color: #78909c;
+  cursor: not-allowed;
+}
+
+/* The Go to login button shown after a successful change. */
+.reset-page .auth-container a.button-link {
+  display: block;
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: 5px;
+  background: var(--r-blue);
+  color: var(--r-blue-ink);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.reset-page .auth-container a.button-link:hover { background: var(--r-blue-light); }
+
+/* ----- Lookup status under the username ---------------------------- */
+
+.reset-page .lookup-status {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--r-blue-ink);
+  text-align: left;
+}
+
+.reset-page .lookup-status.is-error { color: var(--red); }
+
+/* ----- The registered contacts ------------------------------------- */
+
+.contact-list { margin-top: 12px; }
+
+.contact-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--r-blue-light);
+  border-radius: 6px;
+  background: var(--white);
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.contact-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--r-orange);
+}
+
+.contact-option:has(input:checked) {
+  border-color: var(--r-orange);
+  background: var(--r-orange-soft);
+}
+
+.contact-kind { font-weight: 600; color: var(--r-blue-ink); min-width: 48px; }
+
+/* ----- Code box ---------------------------------------------------- */
+
+.code-box {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--r-blue-light);
+}
+
+.reset-page .code-sent-to {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--r-blue-ink);
+  text-align: left;
+}
+
+.code-input {
+  text-align: center;
+  letter-spacing: 8px;
+  font-size: 20px;
+}
+
+.reset-page .countdown {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--r-blue-ink);
+  text-align: center;
+}
+
+.reset-page .code-message {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  text-align: center;
+}
+
+.reset-page .code-message:empty { display: none; }
+
+.reset-page .hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #546e7a;
+  text-align: left;
+}
+
+/* ----- Confirmation after the change ------------------------------- */
+
+.reset-page .done-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--r-blue-ink);
+  text-align: center;
+}
+
+/* ----- Success notice at the top of the window --------------------- */
+
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 12px 12px 12px 16px;
+  border-left: 5px solid var(--r-orange);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--r-blue-ink);
+  box-shadow: 0 6px 20px rgba(13, 60, 97, 0.2);
+  animation: toast-in 0.25s ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--r-blue-soft);
+  font-weight: 700;
+}
+
+.toast-text { font-size: 14px; font-weight: 600; }
+
+.reset-page .toast-close {
+  width: auto;
+  margin: 0;
+  padding: 0 6px;
+  background: none;
+  color: var(--r-blue-ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reset-page .toast-close:hover { background: none; color: var(--r-orange-ink); }

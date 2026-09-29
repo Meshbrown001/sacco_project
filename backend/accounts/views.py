@@ -320,7 +320,7 @@ class PasswordResetCompleteView(APIView):
     """
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "password_reset"
+    throttle_scope = "password_reset_lookup"
 
     def post(self, request):
         serializer = PasswordResetCompleteSerializer(data=request.data)

@@ -151,6 +151,8 @@ REST_FRAMEWORK = {
         'otp_send': '5/hour',
         'otp_verify': '15/hour',
         'password_reset': '10/hour',
+        # Looking up a username as the user types needs more room.
+        'password_reset_lookup': '30/hour',
     },
 }
 
