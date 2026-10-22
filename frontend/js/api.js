@@ -2,7 +2,11 @@
 // api.js - shared by every page. Load it before any other script.
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+// Local backend during development, live backend once hosted.
+const LOCAL_HOSTS = ["127.0.0.1", "localhost"];
+const API_BASE_URL = LOCAL_HOSTS.includes(location.hostname)
+  ? "http://127.0.0.1:8000/api"
+  : "https://nyikwa-backend.onrender.com/api";
 
 // Storage keys used across the frontend.
 const STORAGE_KEYS = ["access_token", "refresh_token", "role", "username", "user_id"];
