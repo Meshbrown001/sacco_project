@@ -4,6 +4,14 @@ from django.conf import settings
 from django.db import models
 
 
+def format_percent(value):
+    """10.00 -> '10', 12.50 -> '12.5', never scientific notation like '1E+1'."""
+    text = f"{Decimal(value):f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
 class MemberWallet(models.Model):
     """
     One balance per member. M-Pesa payments credit it, and the system
@@ -120,7 +128,7 @@ class Penalty(models.Model):
 
     @property
     def reason(self):
-        return f"Fine: {self.rate.normalize()}% of the {self.contribution.month:%B %Y} contribution"
+        return f"Fine: {format_percent(self.rate)}% of the {self.contribution.month:%B %Y} contribution"
 
     def __str__(self):
         state = "waived" if self.waived else ("paid" if self.paid else "unpaid")
@@ -193,7 +201,7 @@ class SpecialLevy(models.Model):
     def fine_label(self):
         if self.fine_type == self.FineType.FIXED:
             return f"KES {self.fine_value:,.2f}"
-        return f"{self.fine_value.normalize()}% of the amount"
+        return f"{format_percent(self.fine_value)}% of the amount"
 
     def __str__(self):
         return f"{self.purpose} - {self.amount} (due {self.deadline})"

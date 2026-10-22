@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chairperson | Nyikwa Abiya Welfare</title>
+  <link rel="stylesheet" href="../../css/chair.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">NA</span>
+      <span class="brand-name">
+        Nyikwa Abiya Welfare
+        <span class="brand-role">Chairperson</span>
+      </span>
+    </div>
+    <div class="topbar-right">
+      <span id="welcome" class="welcome"></span>
+      <button id="logout-btn" class="btn btn-ghost" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <p id="warning-message" class="alert alert-warning" role="alert"></p>
+    <p id="notice-message" class="alert alert-notice" role="status"></p>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" type="button" data-tab="accounts">Accounts</button>
+      <button class="tab" type="button" data-tab="settings">Monthly Settings</button>
+      <button class="tab" type="button" data-tab="levies">Special Contributions</button>
+    </nav>
+
+    <!-- ===== Accounts ===== -->
+    <section id="tab-accounts">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Accounts</h2>
+            <p class="muted" id="accounts-explainer"></p>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="segmented">
+            <button type="button" data-group="staff" class="active">Staff</button>
+            <button type="button" data-group="members">Members</button>
+          </div>
+          <input id="account-search" class="search-input" type="search"
+                 placeholder="Search by name, username or phone" autocomplete="off">
+          <button id="new-staff-btn" class="btn btn-orange" type="button">Create staff account</button>
+        </div>
+
+        <div class="table-wrap">
+          <table id="accounts-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Last login</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-accounts" class="empty-note" hidden>No accounts match.</p>
+      </div>
+    </section>
+
+    <!-- ===== Monthly settings ===== -->
+    <section id="tab-settings" hidden>
+      <div class="cards">
+        <div class="card">
+          <h3>Monthly Contribution</h3>
+          <p class="big-number" id="current-amount">—</p>
+        </div>
+        <div class="card accent">
+          <h3>Late Fine</h3>
+          <p class="big-number" id="current-rate">—</p>
+          <p class="card-note">Of the month's contribution, charged once per late month.</p>
+        </div>
+        <div class="card">
+          <h3>Last Changed</h3>
+          <p class="big-number" id="settings-updated" style="font-size:15px">—</p>
+        </div>
+        <div class="card">
+          <h3>Auto Reminders</h3>
+          <p class="big-number" id="current-auto" style="font-size:15px">—</p>
+          <p class="card-note">Members owing the threshold are prompted automatically.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Change the Monthly Settings</h2>
+            <p class="muted">Both values are required.</p>
+          </div>
+        </div>
+        <form id="settings-form" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="set-amount">Monthly contribution (KES)</label>
+              <input id="set-amount" type="number" min="1" step="1" inputmode="numeric">
+              <small class="field-error" id="error-monthly_amount"></small>
+            </div>
+            <div class="field">
+              <label for="set-rate">Late fine (%)</label>
+              <input id="set-rate" type="number" min="0" max="100" step="0.5" inputmode="decimal">
+              <small class="field-error" id="error-penalty_rate"></small>
+            </div>
+          </div>
+          <p class="note-box">
+            A new amount applies from next month. This month keeps its current amount,
+            since members may already have paid toward it. Fines already charged keep their old rate.
+          </p>
+
+          <h3 style="margin:18px 0 0">Automatic payment reminders</h3>
+          <div class="form-grid">
+            <div class="field full">
+              <label for="set-auto-enabled">
+                <input id="set-auto-enabled" type="checkbox">
+                Send automatic M-Pesa reminders to members in arrears
+              </label>
+            </div>
+            <div class="field">
+              <label for="set-auto-threshold">Start reminders at a debt of (KES)</label>
+              <input id="set-auto-threshold" type="number" min="0" step="1" inputmode="numeric">
+              <small class="field-error" id="error-auto_prompt_threshold"></small>
+            </div>
+            <div class="field">
+              <label for="set-auto-max">Reminders per day (1 to 10)</label>
+              <input id="set-auto-max" type="number" min="1" max="10" step="1" inputmode="numeric">
+              <small class="field-error" id="error-auto_prompt_max_per_day"></small>
+            </div>
+          </div>
+          <p class="note-box">
+            A member owing this much or more receives up to this many M-Pesa prompts a day,
+            spaced at least four hours apart and only between 8am and 8pm. The member still
+            enters their PIN to pay. Switch the reminders off to pause them for everyone.
+          </p>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-deep" id="settings-save">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== Special contributions ===== -->
+    <section id="tab-levies" hidden>
+      <div class="panel" id="levy-list-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Special Contributions</h2>
+            <p class="muted">One-off contributions every active member owes, such as a trip.</p>
+          </div>
+          <button id="new-levy-btn" class="btn btn-orange" type="button">New special contribution</button>
+        </div>
+        <div class="table-wrap">
+          <table id="levies-table">
+            <thead>
+              <tr>
+                <th>Reason</th>
+                <th class="num">Amount</th>
+                <th>Deadline</th>
+                <th>Fine if late</th>
+                <th>Status</th>
+                <th class="num">Paid in full</th>
+                <th class="num">Collected</th>
+                <th class="num">Outstanding</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-levies" class="empty-note" hidden>No special contributions yet.</p>
+      </div>
+
+      <div class="panel" id="levy-detail-panel" hidden>
+        <div class="detail-head">
+          <div>
+            <button class="btn btn-outline btn-small" type="button" id="levy-back">&larr; All special contributions</button>
+            <h2 id="levy-title" style="margin-top:10px"></h2>
+            <p class="muted" id="levy-description"></p>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-outline" type="button" id="levy-edit">Edit</button>
+            <button class="btn btn-deep" type="button" id="levy-close">Close</button>
+            <button class="btn btn-warn" type="button" id="levy-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="facts" id="levy-facts"></div>
+        <div class="cards" id="levy-cards"></div>
+        <div class="table-wrap">
+          <table id="levy-members-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th class="num">Due</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+                <th class="num">Fine</th>
+                <th class="num">Fine paid</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-levy-members" class="empty-note" hidden>No member owes this contribution.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Create staff account ===== -->
+  <div id="staff-modal" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="staff-title">
+      <div class="modal-head">
+        <h3 id="staff-title">Create a Staff Account</h3>
+        <button class="icon-btn" type="button" data-close aria-label="Close">&times;</button>
+      </div>
+      <p>The role is fixed once created. The official keeps their own member account for paying contributions.</p>
+      <form id="staff-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="staff-first">First name</label>
+            <input id="staff-first" autocomplete="off">
+            <small class="field-error" id="staff-error-first_name"></small>
+          </div>
+          <div class="field">
+            <label for="staff-last">Last name</label>
+            <input id="staff-last" autocomplete="off">
+            <small class="field-error" id="staff-error-last_name"></small>
+          </div>
+          <div class="field">
+            <label for="staff-username">Username</label>
+            <input id="staff-username" autocomplete="off" autocapitalize="off">
+            <small class="field-error" id="staff-error-username"></small>
+          </div>
+          <div class="field">
+            <label for="staff-role">Role</label>
+            <select id="staff-role">
+              <option value="secretary">Secretary</option>
+              <option value="treasurer">Treasurer</option>
+              <option value="chairperson">Chairperson</option>
+            </select>
+            <small class="field-error" id="staff-error-role"></small>
+          </div>
+          <div class="field full">
+            <label for="staff-email">Email (optional, for password resets)</label>
+            <input id="staff-email" type="email" autocomplete="off">
+            <small class="field-error" id="staff-error-email"></small>
+          </div>
+          <div class="field">
+            <label for="staff-password">Temporary password</label>
+            <input id="staff-password" type="password" autocomplete="new-password">
+            <small class="field-error" id="staff-error-password"></small>
+          </div>
+          <div class="field">
+            <label for="staff-password2">Confirm password</label>
+            <input id="staff-password2" type="password" autocomplete="new-password">
+            <small class="field-error" id="staff-error-password2"></small>
+          </div>
+        </div>
+        <p class="modal-error" id="staff-error"></p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" data-close>Cancel</button>
+          <button type="submit" class="btn btn-orange" id="staff-save">Create account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Deactivate ===== -->
+  <div id="deactivate-modal" class="overlay" hidden>
+    <div class="modal warning" role="dialog" aria-modal="true" aria-labelledby="deactivate-title">
+      <div class="modal-head">
+        <h3 id="deactivate-title">Deactivate Account</h3>
+        <button class="icon-btn" type="button" data-close aria-label="Close">&times;</button>
+      </div>
+      <p id="deactivate-text"></p>
+      <form id="deactivate-form" novalidate>
+        <div class="field">
+          <label for="deactivate-reason">Reason (required)</label>
+          <textarea id="deactivate-reason" maxlength="255"></textarea>
+          <small class="field-error" id="deactivate-error-reason"></small>
+        </div>
+        <p class="modal-error" id="deactivate-error"></p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" data-close>Keep active</button>
+          <button type="submit" class="btn btn-danger" id="deactivate-save">Deactivate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Create or edit a special contribution ===== -->
+  <div id="levy-modal" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="levy-modal-title">
+      <div class="modal-head">
+        <h3 id="levy-modal-title">New Special Contribution</h3>
+        <button class="icon-btn" type="button" data-close aria-label="Close">&times;</button>
+      </div>
+      <form id="levy-form" novalidate>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="levy-purpose">Reason</label>
+            <input id="levy-purpose" maxlength="255" placeholder="e.g. Annual trip to Mombasa">
+            <small class="field-error" id="levy-error-purpose"></small>
+          </div>
+          <div class="field full">
+            <label for="levy-description">Details (optional)</label>
+            <textarea id="levy-description-input" maxlength="1000"></textarea>
+          </div>
+          <div class="field">
+            <label for="levy-amount">Amount per member (KES)</label>
+            <input id="levy-amount" type="number" min="1" step="1" inputmode="numeric">
+            <small class="hint" id="levy-amount-hint"></small>
+            <small class="field-error" id="levy-error-amount"></small>
+          </div>
+          <div class="field">
+            <label for="levy-deadline">Deadline (last day to pay)</label>
+            <input id="levy-deadline" type="date">
+            <small class="field-error" id="levy-error-deadline"></small>
+          </div>
+          <div class="field">
+            <label for="levy-fine-type">Fine if late</label>
+            <select id="levy-fine-type">
+              <option value="percent">Percentage of the amount</option>
+              <option value="fixed">Fixed amount (KES)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="levy-fine-value" id="levy-fine-label">Fine (%)</label>
+            <input id="levy-fine-value" type="number" min="0" step="0.5" inputmode="decimal">
+            <small class="field-error" id="levy-error-fine_value"></small>
+          </div>
+        </div>
+        <p class="modal-error" id="levy-error"></p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" data-close>Cancel</button>
+          <button type="submit" class="btn btn-orange" id="levy-save">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Confirm ===== -->
+  <div id="confirm-modal" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="modal-head">
+        <h3 id="confirm-title">Please Confirm</h3>
+        <button class="icon-btn" type="button" data-close aria-label="Close">&times;</button>
+      </div>
+      <p id="confirm-text"></p>
+      <p class="modal-error" id="confirm-error"></p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" data-close>Go back</button>
+        <button type="button" class="btn btn-deep" id="confirm-yes">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../js/api.js"></script>
+  <script src="../../js/chair.js"></script>
+</body>
+</html>

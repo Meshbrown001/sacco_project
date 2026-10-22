@@ -13,6 +13,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from .emails import send_welcome_email
 from .models import OTPCode
 from .otp import (
     OTPCooldownError,
@@ -43,8 +44,9 @@ class MemberRegisterView(generics.CreateAPIView):
     """
     Public endpoint - anyone can register as a member.
     POST /api/accounts/register/
-    Creates the member, sends a phone verification code, and returns
-    tokens so the frontend can go straight to the verification page.
+    Creates the member, sends a welcome email and a phone verification
+    code, and returns tokens so the frontend can go straight to the
+    verification page.
     """
     permission_classes = [permissions.AllowAny]
     serializer_class = MemberRegistrationSerializer
@@ -53,6 +55,8 @@ class MemberRegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        welcome_sent = send_welcome_email(user)
 
         otp_sent = True
         try:
@@ -68,6 +72,7 @@ class MemberRegisterView(generics.CreateAPIView):
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
                 "otp_sent": otp_sent,
+                "welcome_email_sent": welcome_sent,
                 "phone_hint": mask_phone(user.phone_number),
             },
             status=status.HTTP_201_CREATED,

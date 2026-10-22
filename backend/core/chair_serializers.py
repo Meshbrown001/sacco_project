@@ -100,12 +100,22 @@ class ContributionSettingsSerializer(serializers.ModelSerializer):
     penalty_rate = serializers.DecimalField(
         max_digits=5, decimal_places=2, min_value=ZERO, max_value=Decimal("100"),
     )
+    auto_prompt_enabled = serializers.BooleanField(required=False)
+    auto_prompt_threshold = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=ZERO, required=False,
+    )
+    auto_prompt_max_per_day = serializers.IntegerField(
+        min_value=1, max_value=10, required=False,
+    )
 
     class Meta:
         model = ContributionSettings
-        fields = ["monthly_amount", "penalty_rate", "updated_at"]
+        fields = [
+            "monthly_amount", "penalty_rate",
+            "auto_prompt_enabled", "auto_prompt_threshold", "auto_prompt_max_per_day",
+            "updated_at",
+        ]
         read_only_fields = ["updated_at"]
-
 
 # ----- Special contributions -----------------------------------------------
 

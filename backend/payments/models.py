@@ -13,6 +13,9 @@ class MpesaTransaction(models.Model):
 
     levy_obligation records what the member chose to pay for: a special
     contribution, or, when empty, the monthly contributions.
+
+    initiated_by records who started the prompt: the member, or the
+    system when it automatically chases a member in arrears.
     """
     class Status(models.TextChoices):
         PENDING = "pending", "Waiting for PIN"
@@ -20,6 +23,10 @@ class MpesaTransaction(models.Model):
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled by member"
         TIMEOUT = "timeout", "Timed out"
+
+    class InitiatedBy(models.TextChoices):
+        MEMBER = "member", "Member"
+        SYSTEM = "system", "System (automatic arrears prompt)"
 
     member = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -40,6 +47,13 @@ class MpesaTransaction(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
         db_index=True,
+    )
+    initiated_by = models.CharField(
+        max_length=10,
+        choices=InitiatedBy.choices,
+        default=InitiatedBy.MEMBER,
+        db_index=True,
+        help_text="Member started it, or the system sent an automatic arrears prompt.",
     )
     merchant_request_id = models.CharField(max_length=100, blank=True)
     checkout_request_id = models.CharField(max_length=100, unique=True, null=True, blank=True)

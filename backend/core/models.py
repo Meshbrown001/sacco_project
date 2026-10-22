@@ -67,6 +67,12 @@ class ContributionSettings(models.Model):
     amount_due when it falls due, and each penalty freezes the rate
     when charged, so changes here affect only future months.
     Only one row may exist.
+
+    The auto_prompt fields control the automatic M-Pesa prompts sent
+    to members in arrears:
+      auto_prompt_enabled     - master switch for the whole feature
+      auto_prompt_threshold   - the debt at which prompts begin
+      auto_prompt_max_per_day - how many prompts one member gets a day
     """
     monthly_amount = models.DecimalField(max_digits=10, decimal_places=2)
     penalty_rate = models.DecimalField(
@@ -75,6 +81,22 @@ class ContributionSettings(models.Model):
         default=Decimal("15.00"),
         validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
         help_text="Late penalty as a percentage of the monthly amount, e.g. 15.00",
+    )
+    auto_prompt_enabled = models.BooleanField(
+        default=True,
+        help_text="Send automatic M-Pesa prompts to members in arrears.",
+    )
+    auto_prompt_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("3000.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="A member owing this much or more gets automatic prompts.",
+    )
+    auto_prompt_max_per_day = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text="How many automatic prompts a member in arrears gets each day.",
     )
     updated_at = models.DateTimeField(auto_now=True)
 

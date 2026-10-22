@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("contributions", "0002_alter_penalty_options_monthlycontribution_amount_due_and_more"),
-        ("core", "__latest__"),
+        ("core", "0002_contributionsettings_penalty_rate_and_more"),
     ]
 
     operations = [

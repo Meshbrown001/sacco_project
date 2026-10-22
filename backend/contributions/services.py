@@ -24,8 +24,14 @@ Deactivation:
  12. A reactivated member owes nothing for the months while they were
      deactivated, nor for special contributions whose deadline fell then.
      Debts from before deactivation stay owed.
+
+Arrears prompts:
+ 13. A member owing at or above the chairperson's threshold is sent an
+     automatic M-Pesa prompt, within civil hours, a set number of times a
+     day. The member still pays by entering their PIN.
 """
 
+import logging
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -45,6 +51,8 @@ from .models import (
 )
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 CENTS = Decimal("0.01")
 ZERO = Decimal("0")
@@ -683,4 +691,130 @@ def run_penalty_sweep(today=None, username=None):
         "penalty_rate": f"{settings_row.penalty_rate}%",
         "penalty_value_each": str(calculate_penalty(settings_row.monthly_amount, settings_row.penalty_rate)),
         "up_to_month": previous_month(current).isoformat(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Automatic prompts for members in arrears
+# ---------------------------------------------------------------------------
+
+# No automatic prompt fires outside these hours (SACCO local time), so a
+# member is never asked for a PIN in the middle of the night.
+PROMPT_START_HOUR = 8     # 8:00 am
+PROMPT_END_HOUR = 20      # 8:00 pm
+# The shortest gap between two automatic prompts to the same member.
+PROMPT_MIN_GAP = timedelta(hours=4)
+
+# Safaricom's result code for "not enough money in the account".
+INSUFFICIENT_FUNDS_CODE = 1
+
+
+def monthly_debt(member, today=None):
+    """
+    What a member owes on monthly contributions right now: every unpaid
+    contribution balance plus every unpaid, unwaived penalty. Special
+    contributions are not counted here.
+    """
+    current = current_month_for(today)
+    contribution_debt = sum(
+        (row.balance for row in MonthlyContribution.objects.filter(
+            member=member, month__lte=current)),
+        ZERO,
+    )
+    penalty_debt = sum(
+        (p.balance for p in Penalty.objects.filter(
+            member=member, waived=False, paid=False)),
+        ZERO,
+    )
+    return money(contribution_debt + penalty_debt)
+
+
+def send_arrears_prompts(today=None, username=None, force=False):
+    """
+    Sends an automatic M-Pesa prompt to every member whose monthly debt is
+    at or above the chairperson's threshold. The member still pays by
+    entering their PIN; this only asks, and keeps asking. The guards keep
+    it civil:
+      - nothing fires outside PROMPT_START_HOUR..PROMPT_END_HOUR,
+      - at most auto_prompt_max_per_day prompts per member per day,
+      - at least PROMPT_MIN_GAP between prompts to one member,
+      - after a prompt failed for want of funds, the next asks for half.
+    force=True ignores the hours, the gap and the daily cap. It is for a
+    hand test only, and still respects the on/off switch and the threshold.
+    """
+    from payments.models import MpesaTransaction
+    from payments.services import PaymentError, initiate_payment
+
+    settings_row = get_contribution_settings()
+    if settings_row is None:
+        return {"error": "No contribution amount is set. Nothing to do."}
+    if not settings_row.auto_prompt_enabled:
+        return {"skipped": "Automatic prompts are switched off."}
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    if not force and not (PROMPT_START_HOUR <= local_now.hour < PROMPT_END_HOUR):
+        return {"skipped": f"Outside prompting hours "
+                           f"({PROMPT_START_HOUR}:00-{PROMPT_END_HOUR}:00)."}
+
+    threshold = settings_row.auto_prompt_threshold
+    max_per_day = settings_row.auto_prompt_max_per_day
+    today_local = local_now.date()
+    system = MpesaTransaction.InitiatedBy.SYSTEM
+
+    members = User.objects.filter(role=User.Role.MEMBER, is_active=True)
+    if username:
+        members = members.filter(username=username)
+
+    checked = 0
+    in_arrears = 0
+    sent = 0
+    for member in members:
+        checked += 1
+        ensure_months(member, today)
+        apply_wallet(member, today)
+
+        debt = monthly_debt(member, today)
+        if debt < threshold or debt <= 0:
+            continue
+        in_arrears += 1
+
+        if not member.phone_number:
+            logger.warning("Arrears: %s has no phone number on file.", member.username)
+            continue
+
+        sent_today = MpesaTransaction.objects.filter(
+            member=member, initiated_by=system, created_at__date=today_local,
+        ).count()
+        if not force and sent_today >= max_per_day:
+            continue
+
+        last = (
+            MpesaTransaction.objects.filter(member=member, initiated_by=system)
+            .order_by("-created_at")
+            .first()
+        )
+        if not force and last and now - last.created_at < PROMPT_MIN_GAP:
+            continue
+
+        amount = debt
+        if last and last.result_code == INSUFFICIENT_FUNDS_CODE:
+            amount = money(debt / 2)
+        if amount < 1:
+            amount = debt
+
+        try:
+            initiate_payment(member, amount, member.phone_number, initiated_by=system)
+            sent += 1
+            logger.info("Arrears: prompted %s for KES %s (owes %s).",
+                        member.username, amount, debt)
+        except PaymentError as exc:
+            logger.info("Arrears: skipped %s (%s)", member.username, exc)
+
+    return {
+        "members_checked": checked,
+        "members_in_arrears": in_arrears,
+        "prompts_sent": sent,
+        "threshold": str(threshold),
+        "max_per_day": max_per_day,
     }

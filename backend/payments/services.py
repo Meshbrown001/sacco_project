@@ -93,10 +93,13 @@ def placeholder_reference(checkout_request_id):
 # 1. Starting a payment
 # ---------------------------------------------------------------------------
 
-def initiate_payment(member, amount, phone_number, levy_obligation=None):
+def initiate_payment(member, amount, phone_number, levy_obligation=None,
+                     initiated_by=MpesaTransaction.InitiatedBy.MEMBER):
     """
     Records the request, then sends the PIN prompt. levy_obligation is the
     special contribution the member chose; None means monthly contributions.
+    initiated_by is 'member' for a member's own payment, or 'system' for an
+    automatic arrears prompt.
     """
     payment_settings = PaymentSettings.objects.first()
     if payment_settings is None:
@@ -119,6 +122,7 @@ def initiate_payment(member, amount, phone_number, levy_obligation=None):
         levy_obligation=levy_obligation,
         phone_number=phone_number,
         amount=Decimal(amount),
+        initiated_by=initiated_by,
     )
 
     # Shown on the member's phone; Safaricom allows 13 characters.

@@ -126,11 +126,15 @@ def reactivate_account(actor, target, today=None):
 # Monthly settings
 # ---------------------------------------------------------------------------
 
-def update_contribution_settings(actor, monthly_amount, penalty_rate):
+def update_contribution_settings(actor, monthly_amount, penalty_rate,
+                                 auto_prompt_enabled=None,
+                                 auto_prompt_threshold=None,
+                                 auto_prompt_max_per_day=None):
     """
-    Saves the new amount and fine rate. Before saving, every active member's
-    current month is created at the old amount, so the change only affects
-    months that start after it.
+    Saves the new amount, fine rate and arrears-prompt settings. Before
+    saving, every active member's current month is created at the old
+    amount, so a change to the amount affects only months that start after
+    it. A prompt setting left as None keeps its current value.
     """
     with transaction.atomic():
         for member in User.objects.filter(role=User.Role.MEMBER, is_active=True):
@@ -142,6 +146,13 @@ def update_contribution_settings(actor, monthly_amount, penalty_rate):
         else:
             settings_row.monthly_amount = monthly_amount
             settings_row.penalty_rate = penalty_rate
+
+        if auto_prompt_enabled is not None:
+            settings_row.auto_prompt_enabled = auto_prompt_enabled
+        if auto_prompt_threshold is not None:
+            settings_row.auto_prompt_threshold = auto_prompt_threshold
+        if auto_prompt_max_per_day is not None:
+            settings_row.auto_prompt_max_per_day = auto_prompt_max_per_day
         settings_row.save()
 
     return settings_row

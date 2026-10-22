@@ -122,20 +122,29 @@ class SettingsView(APIView):
     def get(self, request):
         row = ContributionSettings.objects.first()
         if row is None:
-            return Response({"monthly_amount": None, "penalty_rate": "15.00", "updated_at": None})
+            return Response({
+                "monthly_amount": None,
+                "penalty_rate": "15.00",
+                "auto_prompt_enabled": True,
+                "auto_prompt_threshold": "3000.00",
+                "auto_prompt_max_per_day": 3,
+                "updated_at": None,
+            })
         return Response(ContributionSettingsSerializer(row).data)
 
     def put(self, request):
         serializer = ContributionSettingsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
         row = update_contribution_settings(
             request.user,
-            serializer.validated_data["monthly_amount"],
-            serializer.validated_data["penalty_rate"],
+            data["monthly_amount"],
+            data["penalty_rate"],
+            auto_prompt_enabled=data.get("auto_prompt_enabled"),
+            auto_prompt_threshold=data.get("auto_prompt_threshold"),
+            auto_prompt_max_per_day=data.get("auto_prompt_max_per_day"),
         )
         return Response(ContributionSettingsSerializer(row).data)
-
-
 # ----- Special contributions -----------------------------------------------
 
 class LevyListCreateView(APIView):
