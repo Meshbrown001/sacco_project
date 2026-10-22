@@ -148,6 +148,7 @@ USE_TZ = True
 
 
 # Static files
+WHITENOISE_MANIFEST_STRICT = False
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
