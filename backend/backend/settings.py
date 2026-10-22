@@ -118,12 +118,11 @@ DATABASES = {
         'PORT': config('DB_PORT', default='5432'),
     }
 }
-
 DATABASE_URL = config('DATABASE_URL', default='')
 if DATABASE_URL:
     import dj_database_url
     DATABASES['default'] = dj_database_url.parse(
-        DATABASE_URL, conn_max_age=600, ssl_require=True,
+        DATABASE_URL, conn_max_age=0, conn_health_checks=True, ssl_require=True,
     )
 
 
