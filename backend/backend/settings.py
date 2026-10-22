@@ -21,7 +21,11 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 # localhost always works. Extra hosts, such as the deployed domain or the
 # ngrok tunnel Safaricom calls, come from EXTRA_ALLOWED_HOSTS in the env.
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] + [
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'https://nyikwa.onrender.com'
+    ] + [
     host.strip()
     for host in config('EXTRA_ALLOWED_HOSTS', default='').split(',')
     if host.strip()
