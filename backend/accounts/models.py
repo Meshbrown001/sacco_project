@@ -60,6 +60,15 @@ class CustomUser(AbstractUser):
     def is_staff_role(self):
         return self.role in [self.Role.SECRETARY, self.Role.TREASURER, self.Role.CHAIRPERSON]
 
+    def save(self, *args, **kwargs):
+        # Unique fields must be NULL, not "", when empty, so staff accounts
+        # (which carry no phone or ID) never collide with each other.
+        if not self.phone_number:
+            self.phone_number = None
+        if not self.national_id:
+            self.national_id = None
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.username} ({self.role})"
 
