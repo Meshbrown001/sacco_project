@@ -87,7 +87,7 @@ header {
 .cta-band .btn-amber:hover { background: var(--amber-dark); }
 
 /* Footer / Reach Us */
-footer { background: var(--deep-blue-dark); color: rgba(255,255,255,0.86); padding: 56px 0 26px; }
+footer { background: var(--slate); color: rgba(255,255,255,0.86); padding: 56px 0 26px; }
 .foot-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 50px; padding-bottom: 32px; border-bottom: 1px solid rgba(255,255,255,0.12); }
 .foot-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
 .foot-brand .brand-name, .foot-brand .brand-name span { color: var(--white); }
