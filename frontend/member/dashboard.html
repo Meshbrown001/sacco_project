@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Member Dashboard | Nyikwa Abiya Welfare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/member.css">
 </head>
 <body>
@@ -14,6 +17,17 @@
     </div>
     <div class="topbar-right">
       <span id="welcome" class="welcome"></span>
+      <div class="menu">
+        <button id="menu-btn" class="btn btn-menu" type="button">Menu &#9662;</button>
+        <div id="menu-list" class="menu-list" hidden>
+          <button class="menu-item active" type="button" data-view="home">Home</button>
+          <button class="menu-item" type="button" data-view="owe">What You Owe</button>
+          <button class="menu-item" type="button" data-view="special">Special Contributions</button>
+          <button class="menu-item" type="button" data-view="monthly">My Monthly Contributions</button>
+          <button class="menu-item" type="button" data-view="penalties">Penalties</button>
+          <button class="menu-item" type="button" data-view="payments">Recent Payments</button>
+        </div>
+      </div>
       <button id="logout-btn" class="btn btn-ghost" type="button">Log out</button>
     </div>
   </header>
@@ -22,158 +36,172 @@
     <p id="error-message" class="alert alert-error" role="alert"></p>
     <p id="notice-message" class="alert alert-success" role="status"></p>
 
-    <!-- Summary -->
-    <section class="cards">
-      <div class="card" id="owed-card">
-        <h3>Total You Owe</h3>
-        <p class="big-number" id="total-owed">—</p>
-        <p class="card-note" id="owed-note"></p>
-      </div>
-      <div class="card">
-        <h3 id="month-title">This Month</h3>
-        <p class="big-number" id="month-balance">—</p>
-        <p class="card-note" id="month-note"></p>
-      </div>
-      <div class="card">
-        <h3>Wallet Credit</h3>
-        <p class="big-number" id="wallet-credit">—</p>
-        <p class="card-note">Pays coming months automatically.</p>
-      </div>
-      <div class="card">
-        <h3>Unpaid Penalties</h3>
-        <p class="big-number" id="penalty-total">—</p>
-        <p class="card-note" id="penalty-rule"></p>
-      </div>
-    </section>
-
-    <!-- What you owe (monthly) -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>What You Owe</h2>
-          <p class="muted">Monthly contributions. Payments clear the oldest month first, the penalty before the contribution.</p>
+    <!-- HOME: summary cards + Make Payment -->
+    <div class="view active" data-view="home">
+      <section class="cards">
+        <div class="card" id="owed-card">
+          <h3>Total You Owe</h3>
+          <p class="big-number" id="total-owed">&mdash;</p>
+          <p class="card-note" id="owed-note"></p>
         </div>
-        <button id="pay-btn" class="btn btn-pay" type="button">Make Payment</button>
-      </div>
-      <div class="table-wrap">
-        <table id="breakdown-table">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th class="num">Contribution</th>
-              <th class="num">Penalty</th>
-              <th class="num">Total</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-          <tfoot></tfoot>
-        </table>
-      </div>
-      <p id="no-debt" class="empty-note" hidden>Nothing owed on monthly contributions. You are up to date.</p>
-    </section>
-
-    <!-- Special contributions -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Special Contributions</h2>
-          <p class="muted">One-off contributions set by the chairperson. A payment toward one clears its fine first, then the amount.</p>
+        <div class="card">
+          <h3 id="month-title">This Month</h3>
+          <p class="big-number" id="month-balance">&mdash;</p>
+          <p class="card-note" id="month-note"></p>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table id="levies-table">
-          <thead>
-            <tr>
-              <th>Reason</th>
-              <th>Deadline</th>
-              <th class="num">Amount</th>
-              <th class="num">Paid</th>
-              <th>Fine</th>
-              <th class="num">Still Owed</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="no-levies" class="empty-note" hidden>No special contributions at the moment.</p>
-    </section>
-
-    <!-- Contributions -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>My Monthly Contributions</h2>
-          <p class="muted">A month is due by midnight on its last day.</p>
+        <div class="card">
+          <h3>Wallet Credit</h3>
+          <p class="big-number" id="wallet-credit">&mdash;</p>
+          <p class="card-note">Pays coming months automatically.</p>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table id="contributions-table">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th class="num">Amount Due</th>
-              <th class="num">Paid</th>
-              <th class="num">Balance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="no-contributions" class="empty-note" hidden>No contributions recorded yet.</p>
-    </section>
-
-    <!-- Penalties -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Penalties</h2>
-          <p class="muted" id="penalty-explainer"></p>
+        <div class="card">
+          <h3>Unpaid Penalties</h3>
+          <p class="big-number" id="penalty-total">&mdash;</p>
+          <p class="card-note" id="penalty-rule"></p>
         </div>
+      </section>
+      <div class="home-actions">
+        <button id="pay-btn" class="btn btn-pay btn-lg" type="button">Make Payment</button>
       </div>
-      <div class="table-wrap">
-        <table id="penalties-table">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Reason</th>
-              <th class="num">Amount</th>
-              <th class="num">Paid</th>
-              <th class="num">Balance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="no-penalties" class="empty-note" hidden>No penalties. Good standing.</p>
-    </section>
+    </div>
 
-    <!-- Payments -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Recent Payments</h2>
-          <p class="muted">Your last ten M-Pesa payments.</p>
+    <!-- WHAT YOU OWE -->
+    <div class="view" data-view="owe">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>What You Owe</h2>
+            <p class="muted">Monthly contributions. Payments clear the oldest month first, the penalty before the contribution.</p>
+          </div>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table id="payments-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th class="num">Amount</th>
-              <th>M-Pesa Receipt</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="no-payments" class="empty-note" hidden>No payments yet.</p>
-    </section>
+        <div class="table-wrap">
+          <table id="breakdown-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Contribution</th>
+                <th class="num">Penalty</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+        <p id="no-debt" class="empty-note" hidden>Nothing owed on monthly contributions. You are up to date.</p>
+      </section>
+    </div>
+
+    <!-- SPECIAL CONTRIBUTIONS -->
+    <div class="view" data-view="special">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Special Contributions</h2>
+            <p class="muted">One-off contributions set by the chairperson. A payment toward one clears its fine first, then the amount.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="levies-table">
+            <thead>
+              <tr>
+                <th>Reason</th>
+                <th>Deadline</th>
+                <th class="num">Amount</th>
+                <th class="num">Paid</th>
+                <th>Fine</th>
+                <th class="num">Still Owed</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-levies" class="empty-note" hidden>No special contributions at the moment.</p>
+      </section>
+    </div>
+
+    <!-- MY MONTHLY CONTRIBUTIONS -->
+    <div class="view" data-view="monthly">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>My Monthly Contributions</h2>
+            <p class="muted">A month is due by midnight on its last day.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="contributions-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Amount Due</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-contributions" class="empty-note" hidden>No contributions recorded yet.</p>
+      </section>
+    </div>
+
+    <!-- PENALTIES -->
+    <div class="view" data-view="penalties">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Penalties</h2>
+            <p class="muted" id="penalty-explainer"></p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="penalties-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Reason</th>
+                <th class="num">Amount</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-penalties" class="empty-note" hidden>No penalties. Good standing.</p>
+      </section>
+    </div>
+
+    <!-- RECENT PAYMENTS -->
+    <div class="view" data-view="payments">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Recent Payments</h2>
+            <p class="muted">Your last ten M-Pesa payments.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="payments-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="num">Amount</th>
+                <th>M-Pesa Receipt</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="no-payments" class="empty-note" hidden>No payments yet.</p>
+      </section>
+    </div>
   </main>
 
   <!-- Payment panel -->
@@ -207,5 +235,6 @@
 
   <script src="../js/api.js"></script>
   <script src="../js/member.js"></script>
+  <script src="../js/member-nav.js"></script>
 </body>
 </html>
