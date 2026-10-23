@@ -79,7 +79,7 @@ header {
 .hero p { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 18px; letter-spacing: -0.2px; line-height: 1.55; color: var(--deep-blue); max-width: 580px; margin: 0 auto; }
 
 /* Green CTA */
-.cta-band { background: var(--emerald); color: var(--white); text-align: center; padding: 56px 24px; }
+.cta-band { background: #065F46; color: var(--white); text-align: center; padding: 56px 24px; }
 .cta-band h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 22px; }
 .btn { text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 30px; border-radius: 10px; cursor: pointer; border: none; transition: transform 0.15s ease, background 0.2s ease; display: inline-block; }
 .btn:hover { transform: translateY(-2px); }

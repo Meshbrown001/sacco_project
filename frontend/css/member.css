@@ -37,8 +37,8 @@ h1, h2, h3, h4, .brand-name, .btn, .big-number, .menu-item, th { font-family: 'P
 /* ----- Buttons ----- */
 .btn { font-weight: 700; border: none; border-radius: 10px; cursor: pointer; padding: 10px 18px; font-size: 14px; transition: background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease; }
 .btn:hover { transform: translateY(-1px); }
-.btn-pay { background: var(--emerald); color: #fff; box-shadow: 0 10px 24px -12px rgba(5, 150, 105, 0.8); }
-.btn-pay:hover { background: var(--emerald-dark); }
+.btn-pay { background: #43B02A; color: #fff; box-shadow: 0 10px 24px -12px rgba(67, 176, 42, 0.85); }
+.btn-pay:hover { background: #379420; }
 .btn-pay:disabled { background: #cbd5e1; color: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
 .btn-lg { padding: 15px 40px; font-size: 16px; }
 .btn-small { padding: 6px 14px; font-size: 13px; }
