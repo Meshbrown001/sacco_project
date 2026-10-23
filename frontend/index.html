@@ -1,11 +1,84 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=login.html">
-  <title>Nyikwa Abiya Welfare</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nyikwa Abiya Welfare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/landing.css">
 </head>
 <body>
-  <p>Loading. If nothing happens, <a href="login.html">click here to log in</a>.</p>
+
+<header>
+  <nav class="nav">
+    <a class="brand" href="#top">
+      <div class="logo">NA</div>
+      <div class="brand-name">Nyikwa Abiya<span>Welfare</span></div>
+    </a>
+    <div class="tabs">
+      <button class="tab active" data-target="top">Home</button>
+      <button class="tab" data-target="reach-us">About Us</button>
+    </div>
+    <div class="nav-right">
+      <a class="nav-login" href="login.html">Login</a>
+      <a class="nav-register" href="register.html">Register</a>
+    </div>
+  </nav>
+</header>
+
+<span id="top"></span>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Save together.<br><span class="accent">Support</span> one another.</h1>
+    <p>Join Nyikwa Abiya Welfare to contribute each month, stand with members in times of need, and follow every shilling from your phone.</p>
+  </div>
+</section>
+
+<section class="cta-band">
+  <h2>Ready to join Nyikwa Abiya Welfare?</h2>
+  <a class="btn btn-amber" href="register.html">Join the Welfare</a>
+</section>
+
+<footer id="reach-us">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-about">
+        <div class="foot-brand">
+          <div class="logo">NA</div>
+          <div class="brand-name">Nyikwa Abiya<span>Welfare</span></div>
+        </div>
+        <p>A community welfare group saving together and supporting one another.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Reach Us</h4>
+        <div class="reach-line"><b>Location:</b> Nairobi, Kenya</div>
+        <div class="reach-line"><b>Email:</b> <a href="mailto:nyikwaabiyawelfare@gmail.com">nyikwaabiyawelfare@gmail.com</a></div>
+        <div class="reach-line"><b>Contact:</b> <a href="tel:0116516580">0116516580</a></div>
+      </div>
+    </div>
+    <div class="copyright">© 2026 Nyikwa Abiya Welfare. All rights reserved.</div>
+  </div>
+</footer>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      const el = document.getElementById(t.dataset.target);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+  });
+  window.addEventListener('scroll', function () {
+    if (window.scrollY < 120) {
+      tabs.forEach(function (x) { x.classList.remove('active'); });
+      document.querySelector('.tab[data-target="top"]').classList.add('active');
+    }
+  });
+</script>
 </body>
 </html>

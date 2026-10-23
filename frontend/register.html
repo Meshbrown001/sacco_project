@@ -4,54 +4,226 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SACCO Member Registration</title>
-  <link rel="stylesheet" href="css/auth.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --deep-blue: #1E3A8A;
+      --emerald: #059669;
+      --amber: #F59E0B;
+      --off-white: #F8FAFC;
+      --white: #FFFFFF;
+      --slate: #1E293B;
+      --red: #DC2626;
+      --deep-blue-dark: #152a63;
+      --amber-dark: #D97706;
+      --muted: #64748B;
+      --line: #E2E8F0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; color: var(--slate); background: var(--off-white); -webkit-font-smoothing: antialiased; }
+    h1, h2, h3, .brand-name, button, label { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+    .auth-wrap { display: flex; min-height: 100vh; }
+
+    /* Left brand panel */
+    .brand-panel {
+      flex: 1;
+      background:
+        radial-gradient(800px 420px at 80% 0%, rgba(5,150,105,0.28), transparent),
+        radial-gradient(700px 400px at 0% 100%, rgba(245,158,11,0.16), transparent),
+        linear-gradient(160deg, var(--deep-blue), var(--deep-blue-dark));
+      color: var(--white); padding: 54px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .logo {
+      width: 46px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.12);
+      display: grid; place-items: center; color: var(--white);
+      font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 17px;
+      box-shadow: inset 0 0 0 2px rgba(245,158,11,0.45);
+    }
+    .brand-name { font-weight: 800; font-size: 18px; line-height: 1.1; color: var(--white); }
+    .brand-name span { display: block; font-size: 11px; font-weight: 600; color: var(--amber); letter-spacing: 1.5px; text-transform: uppercase; }
+    .panel-mid h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.15; margin-bottom: 14px; }
+    .panel-mid h1 .accent { color: var(--amber); }
+    .panel-mid p { color: rgba(255,255,255,0.8); font-size: 16px; max-width: 380px; margin-bottom: 26px; }
+    .perk { display: flex; align-items: center; gap: 10px; font-size: 14.5px; color: rgba(255,255,255,0.9); margin-bottom: 12px; }
+    .perk .tick { width: 22px; height: 22px; border-radius: 50%; background: var(--emerald); display: grid; place-items: center; flex-shrink: 0; }
+    .perk .tick svg { width: 13px; height: 13px; color: #fff; }
+    .panel-foot { font-size: 13px; color: rgba(255,255,255,0.55); }
+
+    /* Right form panel */
+    .form-panel { flex: 1.05; display: grid; place-items: center; padding: 44px 24px; }
+    .form-card { width: 100%; max-width: 440px; }
+    .form-logo { display: none; }
+    .form-card h2 { font-size: 26px; font-weight: 800; color: var(--deep-blue); letter-spacing: -0.4px; margin-bottom: 22px; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 13.5px; font-weight: 600; color: var(--slate); margin-bottom: 7px; }
+    .input-wrap { position: relative; }
+    input {
+      width: 100%; font-family: 'Inter', sans-serif; font-size: 15px; color: var(--slate);
+      background: var(--white); border: 1.5px solid var(--line); border-radius: 11px;
+      padding: 13px 15px; transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    input::placeholder { color: #9aa5b4; }
+    input:focus { outline: none; border-color: var(--deep-blue); box-shadow: 0 0 0 4px rgba(30,58,138,0.12); }
+    input.invalid { border-color: var(--red); box-shadow: 0 0 0 4px rgba(220,38,38,0.12); }
+    .toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-family: 'Plus Jakarta Sans'; font-size: 12.5px; font-weight: 600;
+    }
+    .toggle:hover { color: var(--deep-blue); }
+
+    /* Top error bar: shown only when auth.js fills it */
+    .error {
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25);
+      color: var(--red); font-size: 13.5px; padding: 11px 14px; border-radius: 10px; margin-bottom: 18px;
+    }
+    .error:empty { display: none; }
+
+    /* Per-field error: shown only when auth.js fills it */
+    .field-error { display: block; color: var(--red); font-size: 12.5px; font-weight: 500; margin-top: 6px; }
+    .field-error:empty { display: none; }
+
+    /* Success message, if auth.js shows one */
+    .success { color: var(--emerald); font-size: 13.5px; text-align: center; margin-bottom: 16px; font-weight: 600; }
+    .success:empty { display: none; }
+
+    button[type="submit"] {
+      width: 100%; border: none; cursor: pointer; font-weight: 700; font-size: 15.5px;
+      background: var(--amber); color: var(--deep-blue);
+      padding: 14px; border-radius: 11px; margin-top: 6px; transition: background 0.2s ease, transform 0.15s ease;
+    }
+    button[type="submit"]:hover { background: var(--amber-dark); transform: translateY(-1px); }
+
+    .alt { text-align: center; margin-top: 22px; font-size: 14.5px; color: var(--muted); }
+    .alt a { color: var(--deep-blue); font-weight: 700; text-decoration: none; }
+    .alt a:hover { color: var(--emerald); }
+    .back { text-align: center; margin-top: 10px; }
+    .back a { color: var(--muted); font-size: 13.5px; text-decoration: none; }
+    .back a:hover { color: var(--deep-blue); }
+
+    @media (max-width: 860px) {
+      .brand-panel { display: none; }
+      .form-logo { display: flex; justify-content: center; margin-bottom: 26px; }
+      .form-card h2 { text-align: center; }
+    }
+    @media (max-width: 420px) {
+      .row2 { grid-template-columns: 1fr; gap: 0; }
+    }
+  </style>
 </head>
 <body>
-  <div class="auth-container">
-    <h2>Register as a SACCO Member</h2>
-    <p id="error-message" class="error"></p>
+  <div class="auth-wrap">
 
-    <form id="register-form" novalidate>
-      <label for="first_name">First Name</label>
-      <input type="text" id="first_name" autocomplete="given-name" required>
-      <small class="field-error" id="error-first_name"></small>
+    <!-- Left: brand -->
+    <section class="brand-panel">
+      <a class="brand" href="index.html">
+        <div class="logo">NA</div>
+        <div class="brand-name">Nyikwa Abiya<span>Welfare</span></div>
+      </a>
+      <div class="panel-mid">
+        <h1>Join and start <span class="accent">saving</span> with your group.</h1>
+        <p>Create your member account to contribute each month and stand with the group.</p>
+        <div class="perk"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Pay easily through M-PESA</div>
+        <div class="perk"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> See your contributions anytime</div>
+        <div class="perk"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Welfare support when you need it</div>
+      </div>
+      <div class="panel-foot">© 2026 Nyikwa Abiya Welfare</div>
+    </section>
 
-      <label for="last_name">Last Name</label>
-      <input type="text" id="last_name" autocomplete="family-name" required>
-      <small class="field-error" id="error-last_name"></small>
+    <!-- Right: form -->
+    <section class="form-panel">
+      <div class="form-card">
+        <div class="form-logo">
+          <a class="brand" href="index.html">
+            <div class="logo" style="background:linear-gradient(135deg,var(--deep-blue),var(--emerald))">NA</div>
+            <div class="brand-name" style="color:var(--deep-blue)">Nyikwa Abiya<span>Welfare</span></div>
+          </a>
+        </div>
 
-      <label for="username">Username</label>
-      <input type="text" id="username" autocomplete="username" required>
-      <small class="field-error" id="error-username"></small>
+        <h2>Register as a SACCO Member</h2>
+        <p id="error-message" class="error"></p>
 
-      <label for="email">Email</label>
-      <input type="email" id="email" autocomplete="email" required>
-      <small class="field-error" id="error-email"></small>
+        <form id="register-form" novalidate>
+          <div class="row2">
+            <div class="field">
+              <label for="first_name">First Name</label>
+              <input type="text" id="first_name" autocomplete="given-name" placeholder="First name" required>
+              <small class="field-error" id="error-first_name"></small>
+            </div>
+            <div class="field">
+              <label for="last_name">Last Name</label>
+              <input type="text" id="last_name" autocomplete="family-name" placeholder="Last name" required>
+              <small class="field-error" id="error-last_name"></small>
+            </div>
+          </div>
 
-      <label for="phone_number">Phone Number</label>
-      <input type="tel" id="phone_number" placeholder="07XXXXXXXX"
-             inputmode="numeric" autocomplete="tel" required>
-      <small class="field-error" id="error-phone_number"></small>
+          <div class="field">
+            <label for="username">Username</label>
+            <input type="text" id="username" autocomplete="username" placeholder="Choose a username" required>
+            <small class="field-error" id="error-username"></small>
+          </div>
 
-      <label for="national_id">National ID</label>
-      <input type="text" id="national_id" inputmode="numeric" maxlength="8" required>
-      <small class="field-error" id="error-national_id"></small>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" autocomplete="email" placeholder="you@example.com" required>
+            <small class="field-error" id="error-email"></small>
+          </div>
 
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="new-password" required>
-      <small class="field-error" id="error-password"></small>
+          <div class="field">
+            <label for="phone_number">Phone Number</label>
+            <input type="tel" id="phone_number" placeholder="07XXXXXXXX" inputmode="numeric" autocomplete="tel" required>
+            <small class="field-error" id="error-phone_number"></small>
+          </div>
 
-      <label for="password2">Confirm Password</label>
-      <input type="password" id="password2" autocomplete="new-password" required>
-      <small class="field-error" id="error-password2"></small>
+          <div class="field">
+            <label for="national_id">National ID</label>
+            <input type="text" id="national_id" inputmode="numeric" maxlength="8" placeholder="Your National ID number" required>
+            <small class="field-error" id="error-national_id"></small>
+          </div>
 
-      <button type="submit" id="register-button">Register</button>
-    </form>
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input type="password" id="password" autocomplete="new-password" placeholder="Create a password" required>
+              <button type="button" class="toggle" onclick="togglePw('password', this)">Show</button>
+            </div>
+            <small class="field-error" id="error-password"></small>
+          </div>
 
-    <p>Already have an account? <a href="login.html">Login here</a></p>
+          <div class="field">
+            <label for="password2">Confirm Password</label>
+            <div class="input-wrap">
+              <input type="password" id="password2" autocomplete="new-password" placeholder="Re-enter your password" required>
+              <button type="button" class="toggle" onclick="togglePw('password2', this)">Show</button>
+            </div>
+            <small class="field-error" id="error-password2"></small>
+          </div>
+
+          <button type="submit" id="register-button">Register</button>
+        </form>
+
+        <div class="alt">Already have an account? <a href="login.html">Login here</a></div>
+        <div class="back"><a href="index.html">Back to home</a></div>
+      </div>
+    </section>
+
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script>
+    function togglePw(id, btn) {
+      const f = document.getElementById(id);
+      if (f.type === 'password') { f.type = 'text'; btn.textContent = 'Hide'; }
+      else { f.type = 'password'; btn.textContent = 'Show'; }
+    }
+  </script>
 </body>
 </html>

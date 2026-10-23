@@ -4,29 +4,73 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SACCO Login</title>
-  <link rel="stylesheet" href="css/auth.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/auth-ui.css">
 </head>
 <body>
-  <div class="auth-container">
-    <h2>Login to Your SACCO Account</h2>
-    <p id="error-message" class="error"></p>
+  <div class="auth-wrap">
 
-    <form id="login-form" novalidate>
-      <label for="username">Username</label>
-      <input type="text" id="username" autocomplete="username" required>
+    <section class="brand-panel">
+      <a class="brand" href="index.html">
+        <div class="logo">NA</div>
+        <div class="brand-name">Nyikwa Abiya<span>Welfare</span></div>
+      </a>
+      <div class="panel-mid">
+        <h1>Welcome back to your <span class="accent">welfare</span> group.</h1>
+        <p>Log in to view your contributions, pay through M-PESA, and keep your record up to date.</p>
+      </div>
+      <div class="panel-foot">© 2026 Nyikwa Abiya Welfare</div>
+    </section>
 
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="current-password" required>
+    <section class="form-panel">
+      <div class="form-card">
+        <div class="form-logo">
+          <a class="brand" href="index.html">
+            <div class="logo" style="background:linear-gradient(135deg,var(--deep-blue),var(--emerald))">NA</div>
+            <div class="brand-name" style="color:var(--deep-blue)">Nyikwa Abiya<span>Welfare</span></div>
+          </a>
+        </div>
 
-      <p class="forgot-link"><a href="forgot_password.html">Forgot password?</a></p>
+        <h2>Member Log In</h2>
+        <p class="lead">Enter your details to access your account.</p>
 
-      <button type="submit">Login</button>
-    </form>
+        <p id="error-message" class="error"></p>
 
-    <p>Don't have an account? <a href="register.html">Register here</a></p>
+        <form id="login-form" novalidate>
+          <div class="field">
+            <label for="username">Username</label>
+            <input type="text" id="username" autocomplete="username" placeholder="Your username" required>
+            <small class="field-error" id="error-username"></small>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input type="password" id="password" autocomplete="current-password" placeholder="Your password" required>
+              <button type="button" class="toggle" onclick="togglePw('password', this)">Show</button>
+            </div>
+            <small class="field-error" id="error-password"></small>
+          </div>
+          <div class="forgot"><a href="forgot_password.html">Forgot password?</a></div>
+          <button type="submit" id="login-button">Log In</button>
+        </form>
+
+        <div class="alt">Don't have an account? <a href="register.html">Register here</a></div>
+        <div class="back"><a href="index.html">Back to home</a></div>
+      </div>
+    </section>
+
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
+  <script>
+    function togglePw(id, btn) {
+      const f = document.getElementById(id);
+      if (f.type === 'password') { f.type = 'text'; btn.textContent = 'Hide'; }
+      else { f.type = 'password'; btn.textContent = 'Show'; }
+    }
+  </script>
 </body>
 </html>
