@@ -13,6 +13,7 @@
   --off-white: #F8FAFC;
   --white: #FFFFFF;
   --slate: #1E293B;
+  --slate-dark: #0f172a;
   --red: #DC2626;
   --muted: #64748B;
   --line: #E8ECF2;
@@ -26,9 +27,9 @@ body { margin: 0; background: #eef2f8; font-family: 'Inter', system-ui, sans-ser
 h1, h2, h3, h4, .brand-name, .btn, .big-number, .menu-item, th { font-family: 'Plus Jakarta Sans', sans-serif; }
 
 /* ----- Top bar ----- */
-.topbar { background: linear-gradient(120deg, var(--deep-blue), var(--deep-blue-dark)); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 14px rgba(21, 42, 99, 0.25); }
+.topbar { background: var(--slate); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.25); }
 .brand { display: flex; align-items: center; gap: 11px; }
-.brand-mark { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,255,255,0.22), var(--emerald)); display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff; box-shadow: inset 0 0 0 2px rgba(245,158,11,0.5); }
+.brand-mark { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, rgba(255,255,255,0.2), var(--emerald)); display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff; box-shadow: inset 0 0 0 2px rgba(245,158,11,0.5); }
 .brand-name { font-weight: 800; font-size: 16px; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .welcome { font-size: 14px; color: rgba(255,255,255,0.88); font-weight: 500; }
@@ -44,7 +45,7 @@ h1, h2, h3, h4, .brand-name, .btn, .big-number, .menu-item, th { font-family: 'P
 .btn-block { width: 100%; }
 .btn-ghost { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.35); }
 .btn-ghost:hover { background: rgba(255,255,255,0.16); }
-.btn-menu { background: var(--amber); color: var(--deep-blue-dark); }
+.btn-menu { background: var(--amber); color: var(--slate-dark); }
 .btn-menu:hover { background: var(--amber-dark); color: #fff; }
 
 /* ----- Dropdown menu ----- */
@@ -69,34 +70,22 @@ h1, h2, h3, h4, .brand-name, .btn, .big-number, .menu-item, th { font-family: 'P
 
 /* ----- Cards ----- */
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 30px; }
-.card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: var(--shadow-sm); transition: transform 0.18s ease, box-shadow 0.18s ease; position: relative; overflow: hidden; }
-.card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--deep-blue); }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: var(--shadow-sm); transition: transform 0.18s ease, box-shadow 0.18s ease; }
 .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
-.cards .card:nth-child(1) h3 { color: var(--amber-dark); }
-.cards .card:nth-child(1)::before { background: var(--amber); }
-.cards .card:nth-child(2) h3 { color: var(--deep-blue); }
-.cards .card:nth-child(2)::before { background: var(--deep-blue); }
-.cards .card:nth-child(3) h3 { color: var(--emerald-dark); }
-.cards .card:nth-child(3)::before { background: var(--emerald); }
-.cards .card:nth-child(4) h3 { color: var(--amber-dark); }
-.cards .card:nth-child(4)::before { background: var(--amber); }
-#owed-card.attention::before { background: var(--red); }
-#owed-card.attention h3 { color: var(--red); }
-#owed-card.attention .big-number { color: var(--red); }
-#owed-card.clear::before { background: var(--emerald); }
-#owed-card.clear h3 { color: var(--emerald-dark); }
-#owed-card.clear .big-number { color: var(--emerald-dark); }
-.card h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; margin: 4px 0 10px; }
+.card h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; color: var(--muted); margin: 0 0 10px; }
 .big-number { font-size: 28px; font-weight: 800; color: var(--slate); margin: 0 0 6px; letter-spacing: -0.5px; }
 .card-note { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+/* Only Total You Owe stands out */
+#owed-card.attention .big-number { color: var(--red); }
+#owed-card.clear .big-number { color: var(--emerald-dark); }
 
 .home-actions { text-align: center; margin-top: 4px; }
 
 /* ----- Panels and tables ----- */
 .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow-sm); }
 .panel-head { margin-bottom: 18px; }
-.panel h2 { font-size: 20px; color: var(--deep-blue); font-weight: 800; margin: 0; padding-bottom: 12px; border-bottom: 2px solid var(--line); position: relative; }
-.panel h2::after { content: ""; position: absolute; left: 0; bottom: -2px; width: 52px; height: 2px; background: var(--amber); }
+.panel h2 { font-size: 20px; color: var(--deep-blue); font-weight: 800; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .muted { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
