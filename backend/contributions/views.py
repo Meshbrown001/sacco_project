@@ -342,3 +342,36 @@ class MonthlyListDetailView(APIView):
                 "total_collected": str(totals["collected"] + totals["penalties_collected"]),
             },
         })
+
+
+
+from django.shortcuts import get_object_or_404
+from accounts.permissions import IsSecretary
+from .models import SpecialLevy
+# (APIView and Response are already imported at the top of this file.)
+
+
+class SecretaryLevyListView(APIView):
+    """GET /api/contributions/secretary/levies/ - all special contributions, newest first."""
+    permission_classes = [IsSecretary]
+
+    def get(self, request):
+        from core.chair_serializers import LevySerializer
+        levies = SpecialLevy.objects.select_related("created_by").order_by("-created_at")
+        return Response({"levies": LevySerializer(levies, many=True).data})
+
+
+class SecretaryLevyDetailView(APIView):
+    """GET /api/contributions/secretary/levies/<id>/ - one contribution and every member's record."""
+    permission_classes = [IsSecretary]
+
+    def get(self, request, pk):
+        from core.chair_serializers import LevySerializer, LevyObligationRowSerializer
+        levy = get_object_or_404(SpecialLevy, pk=pk)
+        obligations = levy.obligations.select_related("member").order_by(
+            "member__first_name", "member__username"
+        )
+        return Response({
+            "levy": LevySerializer(levy).data,
+            "members": LevyObligationRowSerializer(obligations, many=True).data,
+        })    

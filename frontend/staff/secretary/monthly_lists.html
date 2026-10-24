@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monthly Lists | Nyikwa Abiya Welfare</title>
+  <title>Contribution Lists | Nyikwa Abiya Welfare</title>
   <link rel="stylesheet" href="../../css/secretary.css">
 </head>
 <body>
@@ -24,104 +24,196 @@
   <main class="page">
     <p id="warning-message" class="alert alert-warning" role="alert"></p>
 
-    <!-- Year, month, search and actions -->
-    <section class="toolbar">
-      <div class="field">
-        <label for="year-select">Year</label>
-        <select id="year-select"></select>
+    <nav class="tabs no-print">
+      <button class="tab active" type="button" data-tab="monthly">Monthly Contributions</button>
+      <button class="tab" type="button" data-tab="special">Special Contributions</button>
+    </nav>
+
+    <!-- ============ MONTHLY TAB ============ -->
+    <section id="tab-monthly" class="tab-panel">
+      <section class="toolbar no-print">
+        <div class="field">
+          <label for="year-select">Year</label>
+          <select id="year-select"></select>
+        </div>
+        <div class="field">
+          <label for="month-select">Month</label>
+          <select id="month-select"></select>
+        </div>
+        <div class="field field-search">
+          <label for="search-input">Search member</label>
+          <input id="search-input" type="search" placeholder="Name, username or phone" autocomplete="off">
+        </div>
+        <div class="toolbar-actions">
+          <button id="print-btn" class="btn btn-blue" type="button">Print</button>
+          <button id="download-btn" class="btn btn-orange" type="button">Download CSV</button>
+        </div>
+      </section>
+
+      <div class="print-header">
+        <h1>Nyikwa Abiya Welfare: Monthly Contribution List</h1>
+        <p id="print-month"></p>
+        <p id="print-date"></p>
       </div>
-      <div class="field">
-        <label for="month-select">Month</label>
-        <select id="month-select"></select>
+
+      <div class="month-heading">
+        <h1 id="month-title">Loading...</h1>
+        <span id="month-tag" class="month-tag" hidden></span>
       </div>
-      <div class="field field-search">
-        <label for="search-input">Search member</label>
-        <input id="search-input" type="search" placeholder="Name, username or phone" autocomplete="off">
-      </div>
-      <div class="toolbar-actions">
-        <button id="print-btn" class="btn btn-blue" type="button">Print</button>
-        <button id="download-btn" class="btn btn-orange" type="button">Download CSV</button>
-      </div>
+
+      <section class="cards" id="summary-cards" hidden>
+        <div class="card">
+          <h3>Members</h3>
+          <p class="big-number" id="sum-members">—</p>
+          <p class="card-note" id="sum-members-note"></p>
+        </div>
+        <div class="card">
+          <h3>Contributions Expected</h3>
+          <p class="big-number" id="sum-expected">—</p>
+        </div>
+        <div class="card">
+          <h3>Contributions Collected</h3>
+          <p class="big-number" id="sum-collected">—</p>
+        </div>
+        <div class="card accent">
+          <h3>Still Outstanding</h3>
+          <p class="big-number" id="sum-outstanding">—</p>
+        </div>
+        <div class="card">
+          <h3>Penalties Charged</h3>
+          <p class="big-number" id="sum-pen-charged">—</p>
+          <p class="card-note" id="sum-pen-note"></p>
+        </div>
+        <div class="card">
+          <h3>Penalties Collected</h3>
+          <p class="big-number" id="sum-pen-collected">—</p>
+        </div>
+        <div class="card">
+          <h3>Total Received</h3>
+          <p class="big-number" id="sum-total">—</p>
+          <p class="card-note">Contributions plus penalties.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="list-panel" hidden>
+        <div class="panel-head">
+          <h2>Members</h2>
+          <p class="muted" id="showing-count"></p>
+        </div>
+
+        <div class="table-wrap">
+          <table id="members-table">
+            <thead>
+              <tr>
+                <th class="num">#</th>
+                <th>Member</th>
+                <th class="num">Due</th>
+                <th class="num">Paid</th>
+                <th>Contribution</th>
+                <th class="num group-start">Penalty</th>
+                <th class="num">Penalty Paid</th>
+                <th>Penalty Status</th>
+                <th class="num group-start">Total Paid</th>
+                <th>Fully Paid On</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+
+        <p id="no-members" class="empty-note" hidden>No members had joined by the end of this month.</p>
+        <p id="no-results" class="empty-note" hidden>No member matches your search.</p>
+      </section>
     </section>
 
-    <!-- Shown only on paper -->
-    <div class="print-header">
-      <h1>Nyikwa Abiya Welfare: Monthly Contribution List</h1>
-      <p id="print-month"></p>
-      <p id="print-date"></p>
-    </div>
+    <!-- ============ SPECIAL TAB ============ -->
+    <section id="tab-special" class="tab-panel" hidden>
+      <section class="toolbar no-print">
+        <div class="field field-wide">
+          <label for="levy-select">Special contribution</label>
+          <select id="levy-select"></select>
+        </div>
+        <div class="field field-search">
+          <label for="levy-search-input">Search member</label>
+          <input id="levy-search-input" type="search" placeholder="Name, username or phone" autocomplete="off">
+        </div>
+        <div class="toolbar-actions">
+          <button id="levy-print-btn" class="btn btn-blue" type="button">Print</button>
+          <button id="levy-download-btn" class="btn btn-orange" type="button">Download CSV</button>
+        </div>
+      </section>
 
-    <!-- Month title -->
-    <div class="month-heading">
-      <h1 id="month-title">Loading...</h1>
-      <span id="month-tag" class="month-tag" hidden></span>
-    </div>
-
-    <!-- Totals -->
-    <section class="cards" id="summary-cards" hidden>
-      <div class="card">
-        <h3>Members</h3>
-        <p class="big-number" id="sum-members">—</p>
-        <p class="card-note" id="sum-members-note"></p>
-      </div>
-      <div class="card">
-        <h3>Contributions Expected</h3>
-        <p class="big-number" id="sum-expected">—</p>
-      </div>
-      <div class="card">
-        <h3>Contributions Collected</h3>
-        <p class="big-number" id="sum-collected">—</p>
-      </div>
-      <div class="card accent">
-        <h3>Still Outstanding</h3>
-        <p class="big-number" id="sum-outstanding">—</p>
-      </div>
-      <div class="card">
-        <h3>Penalties Charged</h3>
-        <p class="big-number" id="sum-pen-charged">—</p>
-        <p class="card-note" id="sum-pen-note"></p>
-      </div>
-      <div class="card">
-        <h3>Penalties Collected</h3>
-        <p class="big-number" id="sum-pen-collected">—</p>
-      </div>
-      <div class="card">
-        <h3>Total Received</h3>
-        <p class="big-number" id="sum-total">—</p>
-        <p class="card-note">Contributions plus penalties.</p>
-      </div>
-    </section>
-
-    <!-- The list -->
-    <section class="panel" id="list-panel" hidden>
-      <div class="panel-head">
-        <h2>Members</h2>
-        <p class="muted" id="showing-count"></p>
+      <div class="print-header">
+        <h1>Nyikwa Abiya Welfare: Special Contribution List</h1>
+        <p id="levy-print-name"></p>
+        <p id="levy-print-date"></p>
       </div>
 
-      <div class="table-wrap">
-        <table id="members-table">
-          <thead>
-            <tr>
-              <th class="num">#</th>
-              <th>Member</th>
-              <th class="num">Due</th>
-              <th class="num">Paid</th>
-              <th>Contribution</th>
-              <th class="num group-start">Penalty</th>
-              <th class="num">Penalty Paid</th>
-              <th>Penalty Status</th>
-              <th class="num group-start">Total Paid</th>
-              <th>Fully Paid On</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-          <tfoot></tfoot>
-        </table>
+      <div class="month-heading">
+        <h1 id="levy-title">Loading...</h1>
+        <span id="levy-tag" class="month-tag" hidden></span>
       </div>
+      <p class="muted levy-sub" id="levy-sub"></p>
 
-      <p id="no-members" class="empty-note" hidden>No members had joined by the end of this month.</p>
-      <p id="no-results" class="empty-note" hidden>No member matches your search.</p>
+      <section class="cards" id="levy-summary-cards" hidden>
+        <div class="card">
+          <h3>Members</h3>
+          <p class="big-number" id="lsum-members">—</p>
+          <p class="card-note" id="lsum-members-note"></p>
+        </div>
+        <div class="card">
+          <h3>Expected</h3>
+          <p class="big-number" id="lsum-expected">—</p>
+        </div>
+        <div class="card">
+          <h3>Collected</h3>
+          <p class="big-number" id="lsum-collected">—</p>
+        </div>
+        <div class="card accent">
+          <h3>Outstanding</h3>
+          <p class="big-number" id="lsum-outstanding">—</p>
+        </div>
+        <div class="card">
+          <h3>Fines Charged</h3>
+          <p class="big-number" id="lsum-fines-charged">—</p>
+        </div>
+        <div class="card">
+          <h3>Fines Collected</h3>
+          <p class="big-number" id="lsum-fines-collected">—</p>
+        </div>
+      </section>
+
+      <section class="panel" id="levy-list-panel" hidden>
+        <div class="panel-head">
+          <h2>Members</h2>
+          <p class="muted" id="levy-showing-count"></p>
+        </div>
+
+        <div class="table-wrap">
+          <table id="levy-members-table">
+            <thead>
+              <tr>
+                <th class="num">#</th>
+                <th>Member</th>
+                <th class="num">Due</th>
+                <th class="num">Paid</th>
+                <th class="num">Balance</th>
+                <th class="num group-start">Fine</th>
+                <th class="num">Fine Paid</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+
+        <p id="levy-no-members" class="empty-note" hidden>No members owe this special contribution.</p>
+        <p id="levy-no-results" class="empty-note" hidden>No member matches your search.</p>
+      </section>
+
+      <p id="levy-none" class="empty-note" hidden>No special contributions on record yet.</p>
     </section>
   </main>
 

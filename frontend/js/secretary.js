@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// secretary.js - monthly contribution lists. Needs api.js loaded first.
+// secretary.js - monthly and special contribution lists. Needs api.js first.
 // ---------------------------------------------------------------------------
 
 const SACCO_NAME = "Nyikwa Abiya Welfare";
@@ -28,6 +28,13 @@ let yearsData = [];        // [{year, months: [{month, name, label}]}]
 let monthData = null;      // the loaded month's full response
 let visibleMembers = [];   // members after the search filter
 let requestCounter = 0;    // ignores late answers when months change quickly
+
+// Special contributions
+let leviesLoaded = false;
+let leviesList = [];
+let currentLevy = null;        // {levy, members}
+let levyVisibleMembers = [];
+let levyRequestCounter = 0;
 
 
 // ----- Small helpers -------------------------------------------------------
@@ -106,6 +113,23 @@ function handleRequestError(err, fallback) {
 }
 
 
+// ----- Tabs ----------------------------------------------------------------
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+  });
+  document.getElementById("tab-monthly").hidden = name !== "monthly";
+  document.getElementById("tab-special").hidden = name !== "special";
+  showWarning("");
+
+  if (name === "special" && !leviesLoaded) {
+    leviesLoaded = true;
+    loadLevyChoices();
+  }
+}
+
+
 // ----- Year and month dropdowns --------------------------------------------
 
 async function loadMonthChoices() {
@@ -123,7 +147,6 @@ async function loadMonthChoices() {
     return;
   }
 
-  // Start on the month in the address bar, if any, otherwise the current month.
   const fromUrl = new URLSearchParams(window.location.search).get("month");
   const wanted = findMonth(fromUrl) ? fromUrl : data.current;
 
@@ -171,7 +194,6 @@ async function loadMonth(monthIso) {
   setText("month-title", "Loading...");
   showWarning("");
 
-  // Keep the chosen month in the address bar, so a refresh stays on it.
   const url = new URL(window.location.href);
   url.searchParams.set("month", monthIso);
   window.history.replaceState(null, "", url);
@@ -184,7 +206,7 @@ async function loadMonth(monthIso) {
     handleRequestError(err, "Could not load this month's list.");
     return;
   }
-  if (requestId !== requestCounter) return;  // a newer month was chosen meanwhile
+  if (requestId !== requestCounter) return;
 
   monthData = data;
   renderMonth();
@@ -226,7 +248,7 @@ function renderMonth() {
 }
 
 
-// ----- Search and table ----------------------------------------------------
+// ----- Search and table (monthly) ------------------------------------------
 
 function applySearch() {
   if (!monthData) return;
@@ -332,6 +354,172 @@ function renderTable(rows, term) {
 }
 
 
+// ----- Special contributions -----------------------------------------------
+
+const LEVY_TAG = {
+  active: ["Active", "open"],
+  closed: ["Closed", "closed"],
+  cancelled: ["Cancelled", "closed"],
+};
+
+async function loadLevyChoices() {
+  let data;
+  try {
+    data = await apiRequest("/contributions/secretary/levies/", "GET");
+  } catch (err) {
+    handleRequestError(err, "Could not load the special contributions.");
+    return;
+  }
+
+  leviesList = data.levies || [];
+  const select = document.getElementById("levy-select");
+  select.innerHTML = "";
+
+  if (!leviesList.length) {
+    setText("levy-title", "No special contributions yet");
+    document.getElementById("levy-tag").hidden = true;
+    document.getElementById("levy-sub").textContent = "";
+    document.getElementById("levy-summary-cards").hidden = true;
+    document.getElementById("levy-list-panel").hidden = true;
+    document.getElementById("levy-none").hidden = false;
+    return;
+  }
+  document.getElementById("levy-none").hidden = true;
+
+  leviesList.forEach(function (lv) {
+    select.appendChild(new Option(lv.purpose + " (" + lv.status_label + ")", String(lv.id)));
+  });
+  select.value = String(leviesList[0].id);
+  loadLevy(select.value);
+}
+
+async function loadLevy(id) {
+  if (!id) return;
+  const requestId = ++levyRequestCounter;
+
+  setText("levy-title", "Loading...");
+  document.getElementById("levy-tag").hidden = true;
+  showWarning("");
+
+  let data;
+  try {
+    data = await apiRequest("/contributions/secretary/levies/" + id + "/", "GET");
+  } catch (err) {
+    if (requestId !== levyRequestCounter) return;
+    handleRequestError(err, "Could not load this special contribution.");
+    return;
+  }
+  if (requestId !== levyRequestCounter) return;
+
+  currentLevy = data;
+  renderLevy();
+}
+
+function renderLevy() {
+  const levy = currentLevy.levy;
+  const s = levy.summary;
+
+  setText("levy-title", levy.purpose);
+
+  const tag = document.getElementById("levy-tag");
+  const pair = LEVY_TAG[levy.status] || [levy.status_label, "closed"];
+  tag.hidden = false;
+  tag.textContent = pair[0];
+  tag.className = "month-tag " + pair[1];
+
+  setText(
+    "levy-sub",
+    money(levy.amount) + " per member · Deadline " + shortDate(levy.deadline) +
+      " · Fine if late: " + levy.fine_label +
+      (levy.description ? " · " + levy.description : "")
+  );
+
+  document.getElementById("levy-summary-cards").hidden = false;
+  setText("lsum-members", String(s.members));
+  setText("lsum-members-note", s.fully_paid + " paid in full");
+  setText("lsum-expected", money(s.expected));
+  setText("lsum-collected", money(s.collected));
+  setText("lsum-outstanding", money(s.outstanding));
+  setText("lsum-fines-charged", money(s.fines_charged));
+  setText("lsum-fines-collected", money(s.fines_collected));
+
+  document.getElementById("levy-list-panel").hidden = false;
+  applyLevySearch();
+}
+
+function applyLevySearch() {
+  if (!currentLevy) return;
+  const term = document.getElementById("levy-search-input").value.trim().toLowerCase();
+
+  levyVisibleMembers = currentLevy.members.filter(function (m) {
+    if (!term) return true;
+    return (
+      m.name.toLowerCase().includes(term) ||
+      m.username.toLowerCase().includes(term) ||
+      (m.phone || "").includes(term)
+    );
+  });
+
+  renderLevyTable(levyVisibleMembers, term);
+}
+
+function levyFine(m) {
+  return m.fine_waived ? "Waived" : (Number(m.fine_amount) > 0 ? money(m.fine_amount) : "—");
+}
+
+function levyFinePaid(m) {
+  return (!m.fine_waived && Number(m.fine_amount) > 0) ? money(m.fine_amount_paid) : "—";
+}
+
+function renderLevyTable(rows, term) {
+  const body = document.querySelector("#levy-members-table tbody");
+  const foot = document.querySelector("#levy-members-table tfoot");
+  body.innerHTML = "";
+  foot.innerHTML = "";
+
+  const total = currentLevy.members.length;
+  document.getElementById("levy-no-members").hidden = total !== 0;
+  document.getElementById("levy-no-results").hidden = !(total > 0 && rows.length === 0);
+
+  setText(
+    "levy-showing-count",
+    term ? "Showing " + rows.length + " of " + total + " members" : total + " members"
+  );
+
+  rows.forEach(function (m, index) {
+    const tr = document.createElement("tr");
+
+    cell(tr, String(index + 1), "num");
+
+    const nameCell = cell(tr, m.name, "member-name");
+    nameCell.appendChild(el("span", m.username + (m.phone ? " · " + m.phone : ""), "sub-note"));
+
+    cell(tr, money(m.amount_due), "num");
+    cell(tr, money(m.amount_paid), "num");
+    cell(tr, money(m.balance), "num");
+    cell(tr, levyFine(m), "num group-start");
+    cell(tr, levyFinePaid(m), "num");
+    cell(tr, el("span", m.status_label, "badge badge-" + m.status));
+
+    body.appendChild(tr);
+  });
+
+  if (rows.length) {
+    const fined = rows.filter(function (m) { return !m.fine_waived && Number(m.fine_amount) > 0; });
+    const tr = document.createElement("tr");
+    cell(tr, "");
+    cell(tr, term ? "Total (shown)" : "Total");
+    cell(tr, money(sum(rows, function (m) { return m.amount_due; })), "num");
+    cell(tr, money(sum(rows, function (m) { return m.amount_paid; })), "num");
+    cell(tr, money(sum(rows, function (m) { return m.balance; })), "num");
+    cell(tr, money(sum(fined, function (m) { return m.fine_amount; })), "num group-start");
+    cell(tr, money(sum(fined, function (m) { return m.fine_amount_paid; })), "num");
+    cell(tr, "");
+    foot.appendChild(tr);
+  }
+}
+
+
 // ----- Print ---------------------------------------------------------------
 
 function preparePrint() {
@@ -351,6 +539,23 @@ function printList() {
   window.print();
 }
 
+function prepareLevyPrint() {
+  if (!currentLevy) return;
+  const levy = currentLevy.levy;
+  const term = document.getElementById("levy-search-input").value.trim();
+  setText(
+    "levy-print-name",
+    levy.purpose + " · " + levy.status_label + (term ? " (filtered: \"" + term + "\")" : "")
+  );
+  setText("levy-print-date", "Printed " + new Date().toLocaleString("en-KE"));
+}
+
+function printLevy() {
+  if (!currentLevy) return;
+  prepareLevyPrint();
+  window.print();
+}
+
 
 // ----- CSV download --------------------------------------------------------
 
@@ -365,6 +570,17 @@ function csvRow(values) {
 
 function plainNumber(value) {
   return Number(value || 0).toFixed(2);
+}
+
+function saveCsv(lines, filename) {
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
 }
 
 function downloadCsv() {
@@ -423,15 +639,63 @@ function downloadCsv() {
   lines.push(csvRow(["Penalties collected (KES)", plainNumber(s.penalties_collected)]));
   lines.push(csvRow(["Total received (KES)", plainNumber(s.total_collected)]));
 
-  // The BOM at the start makes Excel read the file as UTF-8.
-  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "contributions_" + monthData.month.slice(0, 7) + ".csv";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(link.href);
+  saveCsv(lines, "contributions_" + monthData.month.slice(0, 7) + ".csv");
+}
+
+function downloadLevyCsv() {
+  if (!currentLevy) return;
+  const levy = currentLevy.levy;
+  const s = levy.summary;
+  const term = document.getElementById("levy-search-input").value.trim();
+  const rows = levyVisibleMembers;
+
+  const lines = [
+    csvRow([SACCO_NAME + ": Special Contribution List"]),
+    csvRow(["Contribution", levy.purpose]),
+    csvRow(["Status", levy.status_label]),
+    csvRow(["Amount per member (KES)", plainNumber(levy.amount)]),
+    csvRow(["Deadline", levy.deadline]),
+    csvRow(["Fine if late", levy.fine_label]),
+    csvRow(["Generated", new Date().toLocaleString("en-KE")]),
+  ];
+  if (term) lines.push(csvRow(["Filtered by", term]));
+  lines.push("");
+
+  lines.push(csvRow([
+    "#", "Member", "Username", "Phone",
+    "Due (KES)", "Paid (KES)", "Balance (KES)",
+    "Fine (KES)", "Fine Paid (KES)", "Status",
+  ]));
+
+  rows.forEach(function (m, index) {
+    lines.push(csvRow([
+      index + 1,
+      m.name,
+      m.username,
+      m.phone,
+      plainNumber(m.amount_due),
+      plainNumber(m.amount_paid),
+      plainNumber(m.balance),
+      m.fine_waived ? "Waived" : plainNumber(m.fine_amount),
+      (!m.fine_waived && Number(m.fine_amount) > 0) ? plainNumber(m.fine_amount_paid) : "",
+      m.status_label,
+    ]));
+  });
+
+  lines.push("");
+  if (term) {
+    lines.push(csvRow(["Totals below cover the whole contribution, not only the filtered rows."]));
+  }
+  lines.push(csvRow(["Members", s.members]));
+  lines.push(csvRow(["Paid in full", s.fully_paid]));
+  lines.push(csvRow(["Expected (KES)", plainNumber(s.expected)]));
+  lines.push(csvRow(["Collected (KES)", plainNumber(s.collected)]));
+  lines.push(csvRow(["Outstanding (KES)", plainNumber(s.outstanding)]));
+  lines.push(csvRow(["Fines charged (KES)", plainNumber(s.fines_charged)]));
+  lines.push(csvRow(["Fines collected (KES)", plainNumber(s.fines_collected)]));
+
+  const safe = (levy.purpose || "levy").replace(/[^a-z0-9]+/gi, "_").toLowerCase().slice(0, 40);
+  saveCsv(lines, "special_" + safe + ".csv");
 }
 
 
@@ -442,19 +706,36 @@ if (guardPage()) {
 
   document.getElementById("logout-btn").addEventListener("click", logout);
 
+  // Tabs
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.addEventListener("click", function () { switchTab(tab.dataset.tab); });
+  });
+
+  // Monthly
   document.getElementById("year-select").addEventListener("change", function (e) {
     fillMonthSelect(e.target.value, null);
     loadMonth(document.getElementById("month-select").value);
   });
-
   document.getElementById("month-select").addEventListener("change", function (e) {
     loadMonth(e.target.value);
   });
-
   document.getElementById("search-input").addEventListener("input", applySearch);
   document.getElementById("print-btn").addEventListener("click", printList);
   document.getElementById("download-btn").addEventListener("click", downloadCsv);
-  window.addEventListener("beforeprint", preparePrint);
+
+  // Special contributions
+  document.getElementById("levy-select").addEventListener("change", function (e) {
+    loadLevy(e.target.value);
+  });
+  document.getElementById("levy-search-input").addEventListener("input", applyLevySearch);
+  document.getElementById("levy-print-btn").addEventListener("click", printLevy);
+  document.getElementById("levy-download-btn").addEventListener("click", downloadLevyCsv);
+
+  // Print the tab that is open
+  window.addEventListener("beforeprint", function () {
+    if (!document.getElementById("tab-special").hidden) prepareLevyPrint();
+    else preparePrint();
+  });
 
   loadMonthChoices();
 }
